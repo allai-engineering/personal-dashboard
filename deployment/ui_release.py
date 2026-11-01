@@ -49,7 +49,9 @@ def unpack(body,policy):
   if name not in files or digest(files[name])!=expected:fail('protected_source_changed')
  assets={}
  for name,body in files.items():
-  if not name.startswith('release/web/'):continue
+  if not name.startswith('release/web/'):
+   if name not in policy['trusted_hashes']:fail('unexpected_source_file')
+   continue
   relative=name[len('release/'):]
   if relative in {'web/'+n for n in PROTECTED_WEB}:continue
   validate_web(relative);assets[relative]=body
