@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {integrationRows} from './release/web/integrations-view.mjs';
+const now=Date.now(),time=new Date(now).toISOString();
+const row={id:'a',kind:'account',title:'Example',state:'ok',observed_at:time,weekly_remaining:9,five_hour_remaining:50};
+const data={collected_at:time,integrations:[{id:'test',title:'Test',status:'ok',observed_at:time,records:[row]}]};
+assert.equal(integrationRows(data,now)[0].tone,'critical');
+assert.equal(integrationRows(data,now+90001000)[0].weekly_remaining,null);
+assert.equal(integrationRows(data,now,true)[0].weekly_remaining,null);
+row.weekly_reset_at=new Date(now-1000).toISOString();assert.equal(integrationRows(data,now)[0].weekly_remaining,null);
+row.state='auth_required';assert.equal(integrationRows(data,now)[0].weekly_remaining,null);
+console.log('integration view: low quota, stale, transport error, reset and auth passed');

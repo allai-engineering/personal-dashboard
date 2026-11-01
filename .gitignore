@@ -1,0 +1,14 @@
+node_modules/
+__pycache__/
+*.py[cod]
+test-results/
+playwright-report/
+.env*
+*.pem
+*.key
+*credentials*.json
+*auth*.json
+snapshot*.json
+external-accounts.json
+operations.json
+integrations.json

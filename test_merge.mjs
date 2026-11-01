@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {combinedAccounts} from './release/web/sources.mjs';
+import {accountView} from './release/web/account-view.mjs';
+const now=Date.parse('2026-10-30T10:00:00Z');
+const row={id:'claude_one_org',label:'Claude',provider:'claude',source_id:'f',source_observed_at:'2026-10-30T09:59:00Z',source_status:'ok',quota:{observed_at:'2026-10-30T09:59:00Z',windows:[{remaining_percent:66,window_minutes:10080}]}};
+const s={observed_at_utc:'2026-10-30T09:59:30Z',accounts:[{id:'hk',label:'Hostkey'}],external:{sources:[{id:'f',title:'F',status:'ok',accounts:[{...row,quota:{windows:[]}}]},{id:'digitalocean',title:'DigitalOcean',status:'ok',accounts:[{...row,source_id:'digitalocean'}]}]}};
+let a=combinedAccounts(s);assert.equal(a.length,2);assert.deepEqual(a[1].source_titles,['F','DigitalOcean']);assert.equal(a[1].quota.windows[0].remaining_percent,66);
+assert.equal(accountView(a[1],s,now).windows[0].state,'observed');
+assert.equal(accountView(a[1],s,now+26*3600000).windows[0].state,'old');
+assert.equal(accountView({...a[1],source_status:'unavailable'},s,now).windows[0].state,'old');
+s.external.hostkey_identity_map={hk:row.id};a=combinedAccounts(s);assert.equal(a.length,1);assert.equal(a[0].hostkey,true);assert.deepEqual(a[0].source_titles,['Hostkey','F','DigitalOcean']);
+s.external.sources[1].accounts[0].id='claude_one_other_org';assert.equal(combinedAccounts(s).length,2);
+console.log('merge: matching identity, separate organization, source failure and stale quota passed');
+// Disabled connections must not hide the same subscription from an active source.
+const retired={...row,disabled:true,status:'disabled'};
+const mixed={accounts:[{id:'hk',disabled:true}],external:{hostkey_identity_map:{hk:row.id},sources:[{id:'digitalocean',title:'DigitalOcean',status:'ok',accounts:[retired]},{id:'f',title:'F',status:'ok',accounts:[row]}]}};
+a=combinedAccounts(mixed);assert.equal(a.length,1);assert.deepEqual(a[0].source_titles,['F']);
+mixed.external.sources.pop();assert.equal(combinedAccounts(mixed).length,0);
+assert.equal(combinedAccounts({accounts:[{id:'status-only',status:'disabled'},{id:'unknown'},{id:'error',status:'error'}]}).length,2);
+assert.equal(retired.disabled,true);
+console.log('visibility: disabled connections hidden, active duplicate and unknown/error accounts retained');
+const loginSnapshot={accounts:[{id:'h',label:'Account h'}],external:{hostkey_identity_map:{h:'openai_test'},account_logins:{openai_test:'owner@example.com'}}};
+assert.equal(combinedAccounts(loginSnapshot)[0].login,'owner@example.com');
+assert.equal(combinedAccounts({accounts:[{id:'missing'}]})[0].login,null);

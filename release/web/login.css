@@ -1,0 +1,5 @@
+:root{color-scheme:light;font-family:Arial,Helvetica,sans-serif;color:#202825;background:#fafaf8}
+*{box-sizing:border-box}body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px}
+main{width:100%;max-width:380px}.brand{font-size:12px;color:#657069;margin:0 0 20px}h1{font:normal 32px/1.15 Georgia,serif;margin:0 0 30px;letter-spacing:-.7px}
+label{display:block;font-size:14px;margin-bottom:9px}input,button{width:100%;min-height:48px;border-radius:4px;font:inherit}input{font-size:16px;padding:12px;border:1px solid #bac3bd;background:#fff;color:inherit}input:focus-visible,button:focus-visible{outline:2px solid #21745c;outline-offset:3px}
+button{border:0;background:#21745c;color:#fff;cursor:pointer}button:hover{background:#195c48}#remember{font-size:13px;color:#657069;line-height:1.5;margin:16px 0 0}#error{color:#a45142;font-size:13px;line-height:1.5;margin:12px 0}#error:empty{margin:16px 0}

@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {sortedAccounts,accountView} from './release/web/account-view.mjs';
+const now=Date.parse('2026-10-30T12:00:00Z'),stamp=new Date(now).toISOString();
+const row=(id,remaining,extra={})=>({id,label:id,status:'active',disabled:false,unavailable:false,cooldowns:{status:'ok',items:[]},quota:{observed_at:stamp,windows:[{slot:'seven_day',window_minutes:10080,remaining_percent:remaining}]},...extra});
+const low=row('low',8),high=row('high',55,{windows:{'15':{failed:3,attempt_records:5}}});
+const auth=row('auth',null,{data_problem:'Сессия Claude истекла'}),unknown=row('unknown',null),zero=row('zero',0),stale=row('stale',1,{quota:{observed_at:'2026-10-29T10:00:00Z',windows:[{window_minutes:10080,remaining_percent:1}]}});
+const snapshot={observed_at_utc:stamp,accounts:[auth,high,unknown,low,stale,zero]};
+assert.deepEqual(sortedAccounts(snapshot,'',now).slice(0,3).map(x=>x.account.id),['zero','low','high']);
+assert.equal(accountView(auth,snapshot,now).authorizationIssue,true);
+assert.equal(accountView(row('throttle',null,{data_problem:'Источник ограничил частоту проверки квот'}),snapshot,now).authorizationIssue,false);
+assert.equal(accountView(row('missing',null,{data_problem:'Нет доступа к авторизации на устройстве'}),snapshot,now).authorizationIssue,true);
+const windows=row('multi',null,{quota:{observed_at:stamp,windows:[{slot:'five_hour',window_minutes:300,remaining_percent:2},{slot:'seven_day',window_minutes:10080,remaining_percent:40},{slot:'seven_day_sonnet',window_minutes:10080,remaining_percent:1}]}});
+const view=accountView(windows,snapshot,now);assert.equal(view.weeklyRemaining,40);assert.equal(view.windows[0].slot,'seven_day');
+assert.equal(accountView(stale,snapshot,now).weeklyRemaining,null);
+assert.equal(accountView(low,{...snapshot,cache:{stale:true,last_error:'file_unavailable'}},now).weeklyRemaining,null);
+assert.equal(sortedAccounts(snapshot,'low',now).length,1);
+console.log('weekly order: zero, unknown, stale, auth classification, shared weekly versus model/five-hour windows passed');
+
+assert.equal(accountView(low,{...snapshot,cache:{stale:true,last_error:null}},now).weeklyRemaining,8);
+assert.equal(accountView(low,{...snapshot,cache:{stale:true,last_error:null}},now).fresh,false);

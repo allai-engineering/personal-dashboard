@@ -1,0 +1,15 @@
+{
+  "name": "personal-dashboard",
+  "version": "1.0.0",
+  "description": "Read-only personal infrastructure dashboard",
+  "scripts": {
+    "test:browser": "playwright test"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  },
+  "private": true
+}

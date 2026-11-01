@@ -1,0 +1,24 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Личный дашборд</title><link rel="stylesheet" href="/accounts.css"><script type="module" src="/accounts.mjs"></script></head><body>
+<main>
+<header class="page-head"><div><p class="eyebrow">Личный дашборд · только чтение</p><img class="dashboard-avatar" src="/assets/cutout-1-cafa1f33bb15.png" alt="" width="32" height="32"><h1 id="page-title">Обзор</h1><p id="observation" class="muted">Получаем данные…</p></div><button id="refresh" type="button">Обновить</button></header>
+<nav class="dashboard-nav" aria-label="Разделы">
+<a id="nav-overview" href="#overview">Обзор</a><a id="nav-subscriptions" href="#subscriptions">Подписки</a><a id="nav-balances" href="#balances">Балансы</a><a id="nav-machines" href="#machines">Машины</a></nav>
+<div id="operations-notice" class="notice" role="status" hidden></div>
+<section id="page-overview" aria-label="Обзор">
+<section class="attention-panel"><div class="attention-head"><h2>Требуют внимания</h2><p id="attention-count" class="muted small">Получаем данные…</p></div><div id="attention-list"></div><details id="attention-more" hidden><summary id="attention-more-count">Ещё</summary><div id="attention-rest"></div></details></section>
+<details id="unknown-block" class="unknown-block" hidden><summary id="unknown-summary">Нет подтверждённых данных</summary><div id="unknown-rows"></div></details>
+<h2 class="block-title">Балансы</h2><div id="overview-balances" class="balance-summaries"></div>
+<a id="overview-machines" class="section-link" href="#machines">Машины</a>
+</section>
+<section id="page-subscriptions" aria-label="Подписки" hidden>
+<div id="notice" class="notice" role="status" hidden></div>
+<div class="toolbar"><p id="account-count">Количество аккаунтов неизвестно</p><label class="search"><span class="sr-only">Поиск по аккаунтам</span><input id="search" type="search" placeholder="Поиск по аккаунтам" autocomplete="off"></label></div>
+<p class="muted small">Сначала — меньший остаток общей недельной квоты. Без свежего замера — в конце.</p>
+<section id="accounts" class="accounts" aria-label="Подписки по остатку недельной квоты"></section>
+<section id="authorization-section" class="authorization-section" aria-labelledby="authorization-heading" hidden><h2 id="authorization-heading">Проблемы авторизации</h2><p class="muted small">Для этих аккаунтов нужно восстановить доступ к данным.</p><div id="authorization-accounts" class="accounts"></div></section>
+<details class="technical"><summary>Лимиты Hostkey и источники данных</summary><p id="capacity"></p><p id="policy"></p><p>Hostkey: квоты из рабочих ответов. Остальные источники: чтение страницы использования сервиса без генераций. После 15 минут без наблюдения или наступления срока сброса текущий остаток неизвестен. Другие окна и модели могут отсутствовать.</p><p>Тариф и срок подписки получены из записи авторизации; они не подтверждают оплату или автопродление. Ошибка попытки не равна сбою запроса: повтор мог завершиться успешно. HTTP 200 не доказывает получение полного ответа клиентом.</p><p>Текущий RPM и занятость по аккаунту не измерены. Они не вычисляются из числа завершённых попыток; отсутствие измерений не означает свободный лимит.</p></details>
+</section>
+<section id="page-balances" aria-label="Балансы" hidden><p class="muted small section-intro">Сначала маленькие остатки. Доллары и кредиты не складываются. Неизвестные значения — отдельно от нулевых.</p><div id="balances" class="accounts"></div><p class="muted small section-intro">Пороги подсветки — только в дашборде: $25 / $10; Kie 5 000 / 2 000 кредитов. Лимиты сервисов не изменяются.</p></section>
+<section id="page-machines" aria-label="Машины Hermes" hidden><p id="machine-count" class="muted small"></p><p class="muted small section-intro">Сначала проблемы, затем неизвестное состояние. Проверки Hermes: машины — раз в 6 часов; приложения и бэкапы — раз в 5 минут.</p><div id="machines" class="accounts"></div></section>
+<footer>Только чтение · Страница: 1 мин · Балансы: 5 мин · Время UTC+3</footer>
+</main></body></html>

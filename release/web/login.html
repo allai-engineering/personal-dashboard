@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Вход · CPA</title>
+  <link rel="stylesheet" href="/login.css">
+</head>
+<body>
+  <main>
+    <p class="brand">CPA · Аккаунты</p>
+    <h1>Вход в дашборд</h1>
+    <form method="post" action="/login">
+      <label for="password">Пароль</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required autofocus maxlength="512" aria-describedby="remember error">
+      <p id="error" role="alert"><!-- error --></p>
+      <button type="submit">Войти</button>
+      <p id="remember">Вход сохранится на этом устройстве на 30 дней.</p>
+    </form>
+  </main>
+</body>
+</html>
