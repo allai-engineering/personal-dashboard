@@ -22,6 +22,9 @@ class UIReleaseTests(unittest.TestCase):
   self.assertEqual(assets,{'web/index.html':b'new ui'})
   for key in locked:
    with self.subTest(key=key),self.assertRaises(ValueError):m.unpack(archive({**locked,key:b'changed','release/web/index.html':b'ui'}),policy)
+ def test_new_executable_cannot_change_the_ci_environment(self):
+  files={'release/web/index.html':b'ui','sitecustomize.py':b'bad startup code'}
+  with self.assertRaisesRegex(ValueError,'unexpected_source_file'):m.unpack(archive(files),{'trusted_hashes':{}})
  def test_archive_rejects_links_and_traversal(self):
   b=io.BytesIO()
   with tarfile.open(fileobj=b,mode='w:gz') as t:
