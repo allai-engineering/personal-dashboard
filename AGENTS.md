@@ -7,3 +7,17 @@ Before a nontrivial visual redesign, inspect desktop/mobile and use the installe
 Preserve password-only login/30day cookies, unknown/stale/reset semantics, critical<10%/low<25%, account grouping, disabled exclusions, and read-only APIs. Login files, backend, data-model modules, security headers, tests and CI gates are protected from automatic UI deployment. Never weaken a test to make a change pass. Work on presentation only; use the separate approved integration broker for a new data adapter. Never store or publish secrets, real account names/email addresses, snapshots, logs, generated request text or private infrastructure inventory.
 
 Run Python tests, all test_*.mjs scripts and Chromium desktop/mobile tests. Inspect the screenshots. Push a branch, wait for its exact CI commit, merge only when green, then wait for green CI on the exact main SHA. Install with the server helper and verify its receipt. Restore the previous verified release on a regression. Report the resulting user benefit or a concrete blocker, not every check. Never modify CPA, limits, plugins, routing or another service to complete a UI change.
+
+## Agent skills
+
+### Issue tracker
+
+For task intake, specs, tickets and handoffs, read `docs/agents/issue-tracker.md`: ops owns Plane; GitHub hosts source, PRs and CI only.
+
+### Triage labels
+
+For triage, read `docs/agents/triage-labels.md`: keep the five default roles; ops maps them to the existing Plane workflow.
+
+### Domain docs
+
+Before codebase exploration, read `docs/agents/domain.md`: single-context `GLOSSARY.md` and `docs/adr/`, when present.
