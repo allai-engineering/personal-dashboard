@@ -61,13 +61,15 @@ class CockpitReleaseTests(unittest.TestCase):
     def test_new_ui_baseline_keeps_core_tests_and_login_protected(self):
         files={'release/server.py':b'core','release/cockpit_publish.py':b'publisher',
                'release/web/login.html':b'login','test_cockpit_publish.py':b'test',
+               'release/web/cockpit-view.mjs':b'evidence interpretation',
                'release/web/index.html':b'ui','release/web/cockpit.mjs':b'ui module'}
         policy=m.baseline(files,{'runtime_files':['/synthetic/protected']})
         self.assertIn('release/cockpit_publish.py',policy['trusted_hashes'])
         self.assertIn('test_cockpit_publish.py',policy['trusted_hashes'])
         self.assertIn('release/web/login.html',policy['trusted_hashes'])
+        self.assertIn('release/web/cockpit-view.mjs',policy['trusted_hashes'])
         self.assertNotIn('release/web/index.html',policy['trusted_hashes'])
-        for name in ('release/cockpit_publish.py','test_cockpit_publish.py','release/web/login.html'):
+        for name in ('release/cockpit_publish.py','test_cockpit_publish.py','release/web/login.html','release/web/cockpit-view.mjs'):
             changed={**files,name:b'changed'}
             from test_ui_release import archive
             with self.assertRaisesRegex(ValueError,'protected_source_changed'):

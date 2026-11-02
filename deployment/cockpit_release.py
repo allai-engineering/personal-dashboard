@@ -54,7 +54,7 @@ def source(commit):
 
 def baseline(files,old):
     value={**old,'trusted_hashes':{n:ui.digest(b) for n,b in files.items()
-        if not n.startswith('release/web/') or n[len('release/web/'):] in ui.PROTECTED_WEB}}
+        if not n.startswith('release/web/') or n[len('release/web/'):] in ui.PROTECTED_WEB or n=='release/web/cockpit-view.mjs'}}
     value['runtime_files']=list(dict.fromkeys(old['runtime_files']+[str(p) for k,p in FILES.items() if k!='latest']))
     return value
 
