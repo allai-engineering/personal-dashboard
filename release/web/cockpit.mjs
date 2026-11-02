@@ -22,11 +22,11 @@ function markSeen(record){
 function openLink(record,label){
  const a=el('a',label||record.next||'Посмотреть доказательства','cockpit-action');
  a.href='#evidence/'+opaque(record.id);
- a.addEventListener('click',()=>{returnTo={hash:location.hash||'#overview',id:opaque(record.id)};if(record.revision)markSeen(record);});
+ a.addEventListener('click',event=>{returnTo={hash:location.hash||'#overview',id:event.currentTarget.closest('.cockpit-row')?.id};if(record.revision)markSeen(record);});
  return a;
 }
-function row(record,now,{small=false}={}){
- const article=el('article',null,'cockpit-row '+(record.tone||'unknown')+(small?' is-seen':''));article.id='cockpit-row-'+opaque(record.id);
+function row(record,now,{small=false,scope='issue'}={}){
+ const article=el('article',null,'cockpit-row '+(record.tone||'unknown')+(small?' is-seen':''));article.id='cockpit-row-'+opaque(record.id)+'-'+scope;
  const when=el('div',record.when|| (record.observedAt?relativeTime(record.observedAt,now):'Нет замера'),'cockpit-when');
  const body=el('div',null,'cockpit-body');
  body.append(el('span',record.badge||(record.unconfirmed?'Не решено · текущий статус неизвестен':record.tone==='critical'?'Важно · не решено':record.tone==='unknown'?'Нет подтверждения':small?'Просмотрено · не решено':'Требует внимания'),'cockpit-tag '+(record.tone||'unknown')));
@@ -87,9 +87,9 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  if(!events.length)$('cockpit-events').append(el('p','Подтверждённых дат из доступных источников на 7 дней нет. Это не означает отсутствие сроков.','cockpit-empty'));
  if(events.length>3){const more=el('details',null,'cockpit-fold');more.append(el('summary','Ещё дат: '+(events.length-3)),...events.slice(3));$('cockpit-events').append(more);}
  const taskRecords=view.tasks.map(t=>taskRecord(t,now));for(const r of taskRecords)registry.set(opaque(r.id),r);
- $('cockpit-active').replaceChildren(...view.activeTasks.map(t=>row(taskRecord(t,now),now)));
+ $('cockpit-active').replaceChildren(...view.activeTasks.map(t=>row(taskRecord(t,now),now,{scope:'active'})));
  if(!view.activeTasks.length)$('cockpit-active').append(el('p','Подтверждённых активных исполнений нет. Это не доказательство простоя: журнал может быть неполным.','cockpit-empty'));
- $('hermes-tasks').replaceChildren(...taskRecords.map(r=>row(r,now)));
+ $('hermes-tasks').replaceChildren(...taskRecords.map(r=>row(r,now,{scope:'tasks'})));
  if(!taskRecords.length)$('hermes-tasks').append(el('p','Записи исполнений недоступны.','cockpit-empty'));
  $('hermes-coverage').textContent=(view.cockpitFresh?'Снимок журналов получен. ':'Снимок журналов устарел. ')+view.profiles.map(p=>p.id+': '+word(p.status)+(p.stored_jobs==null?'':' · '+p.stored_jobs+' заданий')).join(' / ');
  $('court-summary').replaceChildren(el('h2',view.courtFresh&&view.court?.status==='ok'?'Охват подтверждён':'Суды: охват неполный'),el('p','Статус отдельного сборщика относится только к указанной области проверки. Он не закрывает пробелы других источников.'));
@@ -99,6 +99,6 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  evidence(now);
  if(pendingFocus&&!location.hash.startsWith('#evidence/')){
   const id=pendingFocus;pendingFocus=null;
-  requestAnimationFrame(()=>{const target=document.getElementById('cockpit-row-'+id);if(target){const fold=target.closest('details');if(fold)fold.open=true;target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:'center'});}});
+  requestAnimationFrame(()=>{const target=document.getElementById(id);if(target){const fold=target.closest('details');if(fold)fold.open=true;target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:'center'});}});
  }
 }

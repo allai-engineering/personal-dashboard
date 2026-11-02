@@ -75,5 +75,8 @@ export function overview(snapshot,accounts,resources,now=Date.now(),transportErr
   events:events.filter(e=>{
    if(e.dateOnly){const day=ms=>new Date(ms+3*3600000).toISOString().slice(0,10);return e.at>=day(now)&&e.at<=day(now+7*86400000);}
    const at=Date.parse(e.at);return Number.isFinite(at)&&at>=now&&at<=now+7*86400000;
-  }).sort((a,b)=>a.at.localeCompare(b.at))};
+  }).sort((a,b)=>{
+   const calendar=e=>e.dateOnly?e.at:new Date(Date.parse(e.at)+3*3600000).toISOString();
+   return calendar(a).localeCompare(calendar(b));
+  })};
 }

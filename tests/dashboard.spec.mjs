@@ -87,4 +87,11 @@ test('changed, missing and recovered observations do not confuse seen with resol
  const saved=await page.evaluate(()=>sessionStorage.getItem('cockpit-seen-v1'));
  expect(saved).not.toContain('example.test');expect(saved).not.toContain('quota-');
  expect(JSON.parse(saved).every(pair=>pair.every(v=>/^[a-f0-9]{16}$/.test(v)))).toBe(true);
+ body.cockpit.tasks.find(t=>t.id==='unverified').liveness='verified';
+ await page.locator('#refresh').click();await page.locator('#nav-hermes').click();
+ const active=page.locator('#hermes-tasks .cockpit-row').filter({hasText:'Synthetic operations check'});
+ await active.locator('a').click();await page.locator('#evidence-back').click();
+ await expect(page.locator('#page-hermes')).toBeVisible();
+ await expect.poll(()=>page.evaluate(()=>document.activeElement?.closest('#hermes-tasks')!==null)).toBe(true);
+ const ids=await page.locator('[id]').evaluateAll(nodes=>nodes.map(n=>n.id));expect(new Set(ids).size).toBe(ids.length);
 });

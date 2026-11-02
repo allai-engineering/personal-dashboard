@@ -43,6 +43,10 @@ dated.cockpit.events=[{id:'today',title:'Synthetic hearing',at:'2026-11-02',date
 const events=overview(dated,[],{balances:[],machines:[],integrated:[]},now,false).events;
 assert.equal(events.length,1,'a date-only event today has no invented expired midnight');
 assert.equal(events[0].dateOnly,true);
+dated.cockpit.events=[
+ {id:'earlier',title:'Synthetic earlier',at:'2026-11-03T00:30:00+03:00',date_kind:'hearing',confirmed:true,observed_at:stamp,source:'Synthetic source'},
+ {id:'later',title:'Synthetic later',at:'2026-11-02T22:00:00Z',date_kind:'hearing',confirmed:true,observed_at:stamp,source:'Synthetic source'}];
+assert.deepEqual(overview(dated,[],{balances:[],machines:[],integrated:[]},now,false).events.map(e=>e.id),['earlier','later'],'different offsets sort by the actual event time');
 const missingQuota=overview({observed_at_utc:stamp},[{account:{id:'no-quota',label:'Synthetic account'},view:{fresh:true,authorizationIssue:false,windows:[]}}],{balances:[],machines:[],integrated:[]},now,false);
 assert.equal(missingQuota.records.some(r=>r.domain==='subscriptions'&&r.state==='unknown'),true,'missing windows are a coverage gap');
 const resources={balances:[],machines:[],integrated:[{key:'synthetic',page:'subscriptions',title:'Synthetic integration',observed_at:stamp,current:true,tone:'warning',kind:'account',weekly_remaining:20,five_hour_remaining:80,problem:'Low quota'}]};
