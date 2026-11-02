@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 import tempfile
 import types
+import os
 import unittest
 from unittest.mock import patch
 
@@ -37,7 +38,8 @@ class CockpitReleaseTests(unittest.TestCase):
             def check(*_):
                 result=next(health)
                 if result:raise result
-            with patch.dict(m.FILES,paths,clear=True),patch.object(m,'DATA',data),patch.object(m,'STATE',root/'backups'),patch.object(m.ui,'CURRENT',current),patch.object(m.ui,'POLICY',policy_path),patch.object(m,'source',return_value=(files,1)),patch.object(m,'guard',return_value={'protected':True}),patch.object(m,'command',side_effect=command),patch.object(m.ui,'verify_current'),patch.object(m.ui,'session',return_value='synthetic-cookie'),patch.object(m.ui,'health',side_effect=check),patch.object(m.ui,'restart'),patch.object(m.os,'chown'),patch.object(m.os,'fchown'),patch.object(m,'verify_sidecar'):
+            account=types.SimpleNamespace(pw_uid=os.getuid(),pw_gid=os.getgid())
+            with patch.dict(m.FILES,paths,clear=True),patch.object(m,'DATA',data),patch.object(m,'STATE',root/'backups'),patch.object(m.ui,'CURRENT',current),patch.object(m.ui,'POLICY',policy_path),patch.object(m,'source',return_value=(files,1)),patch.object(m,'guard',return_value={'protected':True}),patch.object(m,'command',side_effect=command),patch.object(m.ui,'verify_current'),patch.object(m.ui,'session',return_value='synthetic-cookie'),patch.object(m.ui,'health',side_effect=check),patch.object(m.ui,'restart'),patch.object(m.os,'chown'),patch.object(m.os,'fchown'),patch.object(m.pwd,'getpwnam',return_value=account),patch.object(m,'verify_sidecar'):
                 with self.assertRaisesRegex(ValueError,'rollback_incomplete' if shutdown_error else 'candidate_health_failed'):
                     m.apply(payload)
             self.assertEqual(current.resolve(),old)

@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shlex
 import stat
+import pwd
 import subprocess
 import tempfile
 
@@ -42,8 +43,9 @@ def fetch_court(config):
         raise ValueError('court_alias')
     if not isinstance(root, str) or not root.startswith('/') or any(ord(c) < 32 for c in root):
         raise ValueError('court_root')
-    result = subprocess.run(['/usr/sbin/runuser', '-u', 'hermes', '--', '/usr/bin/ssh',
+    result = subprocess.run(['/usr/bin/ssh',
         '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '-o', 'StrictHostKeyChecking=yes',
+        '-o', 'UpdateHostKeys=no', '-o', 'ControlMaster=no', '-o', 'ControlPath=none',
         '-T', alias, 'python3 -I -B - court ' + shlex.quote(root)],
         input=Path(reader.__file__).read_bytes(), capture_output=True, timeout=30)
     if result.returncode or len(result.stdout) > 524288:
@@ -87,14 +89,14 @@ if __name__ == '__main__':
     try:
         config_path = Path('/etc/cpa-dashboard/cockpit-sources.json')
         meta = config_path.lstat()
-        if not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0 or meta.st_mode & 0o077:
+        if not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0 or meta.st_gid != pwd.getpwnam('hermes').pw_gid or meta.st_mode & 0o037:
             raise ValueError('private_source_config_required')
         config = reader.read(config_path, 16384)
         if not isinstance(config, dict) or set(config) != {'hermes_home', 'court_alias', 'court_root'}:
             raise ValueError('source_config')
         if not isinstance(config['hermes_home'], str) or not config['hermes_home'].startswith('/'):
             raise ValueError('hermes_home')
-        print(json.dumps(publish(Path('/var/lib/cpa-dashboard'), config)))
+        print(json.dumps(publish(Path('/var/lib/cpa-dashboard/cockpit'), config)))
     except Exception:
         print(json.dumps({'status': 'collection_failed'}))
         raise SystemExit(1)

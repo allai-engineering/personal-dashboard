@@ -10,13 +10,14 @@ from pathlib import Path
 import re
 import shlex
 import stat
+import pwd
 import subprocess
 import sys
 import tarfile
 
 _spec=importlib.util.spec_from_file_location('cockpit_ui_release',Path(__file__).resolve().with_name('ui_release.py'))
 ui=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(ui)
-DATA=Path('/var/lib/cpa-dashboard');STATE=Path('/var/lib/dashboard-ui/core-upgrades')
+DATA=Path('/var/lib/cpa-dashboard/cockpit');STATE=Path('/var/lib/dashboard-ui/core-upgrades')
 FILES={'sources':Path('/etc/cpa-dashboard/cockpit-sources.json'),
        'dashboard':Path('/etc/systemd/system/cpa-dashboard.service.d/30-cockpit.conf'),
        'publisher':Path('/etc/systemd/system/dashboard-cockpit.service'),
@@ -113,6 +114,7 @@ def apply(payload):
     if args[:3]!=['/usr/bin/python3','-I','/opt/cpa-dashboard/current/server.py'] or '--snapshot-file' not in args or '--auth-file' not in args or '--cockpit-file' in args:ui.fail('dashboard_command')
     args+=['--cockpit-file',str(DATA/'cockpit.json')]
     gid=(old/'server.py').stat().st_gid
+    account=pwd.getpwnam('hermes')
     new.mkdir(mode=0o750);os.chown(new,0,gid)
     for name,body in files.items():
         if not name.startswith('release/'):continue
@@ -131,9 +133,11 @@ def apply(payload):
     ui.atomic(backup/'files.json',json.dumps({str(p):None if v is None else {**v,'body':base64.b64encode(v['body']).decode()} for p,v in saved.items()}).encode(),0o600)
     try:
         for path in FILES.values():path.parent.mkdir(parents=True,exist_ok=True)
-        ui.atomic(FILES['sources'],json.dumps(sources).encode(),0o600)
+        DATA.mkdir(parents=True,exist_ok=True,mode=0o750)
+        os.chown(DATA,account.pw_uid,gid);DATA.chmod(0o750)
+        ui.atomic(FILES['sources'],json.dumps(sources).encode(),0o640,gid=account.pw_gid)
         ui.atomic(FILES['dashboard'],('[Service]\nExecStart=\nExecStart='+shlex.join(args)+'\n').encode(),0o644)
-        unit='[Unit]\nDescription=Read existing Court and Hermes evidence for Captain Cockpit\nAfter=network-online.target\n[Service]\nType=oneshot\nUser=root\nGroup=cpa-dashboard\nExecStart=/usr/bin/python3 -I -B '+str(new/'cockpit_publish.py')+'\nUMask=0077\nTimeoutStartSec=55\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=true\nReadWritePaths=/var/lib/cpa-dashboard\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n'
+        unit='[Unit]\nDescription=Read existing Court and Hermes evidence for Captain Cockpit\nAfter=network-online.target\n[Service]\nType=oneshot\nUser=hermes\nGroup=hermes\nSupplementaryGroups=cpa-dashboard\nExecStart=/usr/bin/python3 -I -B '+str(new/'cockpit_publish.py')+'\nUMask=0077\nTimeoutStartSec=55\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=full\nProtectHome=true\nInaccessiblePaths=-/etc/cpa-dashboard/http-auth.json -/var/lib/cliproxyapi\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n'
         ui.atomic(FILES['publisher'],unit.encode(),0o644)
         ui.atomic(FILES['timer'],b'[Unit]\nDescription=Publish Captain Cockpit evidence every 15 minutes\n[Timer]\nOnBootSec=15min\nOnUnitInactiveSec=15min\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n',0o644)
         command(['systemd-analyze','verify',str(FILES['publisher']),str(FILES['timer'])])

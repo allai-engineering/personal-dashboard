@@ -4,7 +4,9 @@ The owner explicitly requested public installation and server-side updates on th
 
 ## Data and cadence
 
-Existing quota/balance/discovery gates and machine schedules remain byte-identical. A separate data-only oneshot publishes the Court/Hermes sidecar every 15 minutes, matching the existing operations interval. It reads existing evidence; it does not run Court checks, agents, generations or provider APIs. Court reads use Hermes' existing SSH alias, host keys and authorization. Configuration is root-private outside Git. The HTTP server still only reads published files.
+Existing quota/balance/discovery gates and machine schedules remain byte-identical. A separate data-only oneshot runs as Hermes and publishes the Court/Hermes sidecar every 15 minutes into its own directory, matching the existing operations interval. It reads existing evidence; it does not run Court checks, agents, generations or provider APIs. Court reads use Hermes' existing SSH alias, host keys and authorization. Configuration is root-owned, readable only by the Hermes group, outside Git. The HTTP server still only reads published files.
+
+The publisher keeps `NoNewPrivileges`, read-only system configuration and a hidden home-root namespace; actual evidence/SSH files are under `/var/lib/hermes`. The source database connections use `mode=ro` and `query_only`, with WAL visibility. Its normal Hermes filesystem permissions permit SQLite's WAL/shared-memory initialization without granting root or setuid capabilities. Dashboard authentication and CPA storage are inaccessible in this service namespace.
 
 Evidence coverage expires after 30 minutes without a successful publication; original Court observations retain their own age. Process liveness is valid for at most two minutes after observation. A 15-minute publisher does not establish that a process is still running throughout that interval. Failed source reads publish unknown, without retaining a successful receipt as current.
 
