@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Read-only personal infrastructure dashboard",
   "scripts": {
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "prototype:cockpit": "python3 -m http.server 8880 --bind 127.0.0.1 --directory release/web/cockpit-prototype"
   },
   "keywords": [],
   "author": "",
