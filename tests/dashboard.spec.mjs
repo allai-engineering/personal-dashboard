@@ -57,6 +57,7 @@ test('cockpit keeps evidence, seen state, urgency, task origin and partial court
  await expect(page.locator('#hermes-tasks')).toContainText('Ручной');
  await expect(page.locator('#hermes-tasks')).toContainText('Выполнение не подтверждено');
  await page.locator('#nav-overview').click();
+ await expect(page.locator('#page-overview')).toBeVisible();
  await expect(page.locator('#cockpit-active')).toContainText('Подтверждённых активных исполнений нет');
  await expect(page.locator('#cockpit-events')).not.toContainText('Заседание');
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
@@ -80,6 +81,9 @@ test('changed, missing and recovered observations do not confuse seen with resol
  account.quota.observed_at=new Date().toISOString();account.quota.windows[0].remaining_percent=80;
  await page.locator('#refresh').click();
  await expect(low()).toHaveCount(0);
+ account.quota.windows[0].remaining_percent=19;
+ await page.locator('#refresh').click();
+ await expect(low()).toContainText('19%');
  const saved=await page.evaluate(()=>sessionStorage.getItem('cockpit-seen-v1'));
  expect(saved).not.toContain('example.test');expect(saved).not.toContain('quota-');
  expect(JSON.parse(saved).every(pair=>pair.every(v=>/^[a-f0-9]{16}$/.test(v)))).toBe(true);

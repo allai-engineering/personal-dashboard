@@ -43,4 +43,12 @@ dated.cockpit.events=[{id:'today',title:'Synthetic hearing',at:'2026-11-02',date
 const events=overview(dated,[],{balances:[],machines:[],integrated:[]},now,false).events;
 assert.equal(events.length,1,'a date-only event today has no invented expired midnight');
 assert.equal(events[0].dateOnly,true);
+const missingQuota=overview({observed_at_utc:stamp},[{account:{id:'no-quota',label:'Synthetic account'},view:{fresh:true,authorizationIssue:false,windows:[]}}],{balances:[],machines:[],integrated:[]},now,false);
+assert.equal(missingQuota.records.some(r=>r.domain==='subscriptions'&&r.state==='unknown'),true,'missing windows are a coverage gap');
+const resources={balances:[],machines:[],integrated:[{key:'synthetic',page:'subscriptions',title:'Synthetic integration',observed_at:stamp,current:true,tone:'warning',kind:'account',weekly_remaining:20,five_hour_remaining:80,problem:'Low quota'}]};
+let integrated=reconcile(new Map(),overview({},[],resources,now,false).records);
+const viewed=new Map([['integration-synthetic',integrated.get('integration-synthetic').revision]]);
+resources.integrated[0].weekly_remaining=11;
+integrated=reconcile(integrated,overview({},[],resources,now,false).records);
+assert.equal(compact(integrated.get('integration-synthetic'),viewed),false,'integrated quota worsening re-escalates');
 console.log('Cockpit state, coverage, execution-origin and unknown-date checks passed');

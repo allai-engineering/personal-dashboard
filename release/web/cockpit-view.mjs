@@ -30,6 +30,7 @@ export function overview(snapshot,accounts,resources,now=Date.now(),transportErr
   const authFresh=!transportError&&!snapshot?.cache?.last_error&&freshAt(observed,now,90000);
   add({id:'auth-'+a.id,entity,domain:'subscriptions',title:name+' · доступ',state:v.authorizationIssue?(authFresh?'open':'unknown'):v.fresh?'clear':'unknown',tone:'warning',reason:'authorization',observedAt:observed,
    detail:'Для чтения данных нужна авторизация. Остаток квоты неизвестен.',evidence:[['Источник',(a.source_titles||[]).join(', ')||'Снимок аккаунтов'],['Результат',v.authorizationIssue?'Ошибка доступа':'Свежая ошибка доступа не подтверждена']],next:'Открыть сведения о доступе'});
+  if(!v.windows.length)add({id:'quota-missing-'+a.id,entity,domain:'subscriptions',title:name+' · квота неизвестна',state:'unknown',tone:'unknown',observedAt:a.quota?.observed_at,detail:'В источнике нет окон квоты. Отсутствие измерения не означает свободный лимит.',evidence:[['Окна квоты','Не получены']],next:'Открыть сведения о квоте'});
   for(const w of v.windows){
    const measured=!transportError&&w.state==='observed',tone=w.remaining<10?'critical':'warning';
    add({id:'quota-'+a.id+'-'+w.slot+'-'+w.window_minutes,entity,domain:'subscriptions',title:name+' · '+windowLabel(w.window_minutes),state:measured?(w.remaining<25?'open':'clear'):'unknown',tone,reason:'quota',value:measured?w.remaining:null,observedAt:a.quota?.observed_at,
@@ -50,7 +51,8 @@ export function overview(snapshot,accounts,resources,now=Date.now(),transportErr
  }
  for(const r of resources.integrated){
   const observed=freshAt(r.observed_at,now,90000)&&!transportError;
-  add({id:'integration-'+r.key,domain:r.page,title:r.title,state:observed&&['critical','warning'].includes(r.tone)?'open':r.current&&r.tone==='ok'?'clear':'unknown',tone:r.tone,reason:r.problem||'integration',observedAt:r.observed_at,detail:r.problem||'Сведения интеграции',evidence:[['Источник',r.source],['Наблюдение',dateLabel(r.observed_at)]],next:'Открыть источник'});
+  const measurements=r.kind==='account'?[r.weekly_remaining,r.five_hour_remaining]:[r.value];
+  add({id:'integration-'+r.key,domain:r.page,title:r.title,state:observed&&['critical','warning'].includes(r.tone)?'open':r.current&&r.tone==='ok'?'clear':'unknown',tone:r.tone,reason:JSON.stringify([r.problem||'integration',...measurements]),observedAt:r.observed_at,detail:r.problem||'Сведения интеграции',evidence:[['Источник',r.source],['Наблюдение',dateLabel(r.observed_at)],...(r.kind==='account'?[['Неделя',r.weekly_remaining==null?'Неизвестно':r.weekly_remaining+'%'],['5 часов',r.five_hour_remaining==null?'Неизвестно':r.five_hour_remaining+'%']]:r.kind==='balance'?[['Значение',r.value==null?'Неизвестно':r.value+' '+(r.unit||'')]]:[])],next:'Открыть источник'});
  }
  const data=snapshot?.cockpit,c=data?.court,cockpitFresh=!transportError&&freshAt(data?.collected_at,now,120);
  const courtFresh=cockpitFresh&&freshAt(c?.observed_at,now,129600);

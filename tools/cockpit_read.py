@@ -151,7 +151,7 @@ def hermes(root):
             tasks.append({'id': hashlib.sha256((profile + ':' + jid).encode()).hexdigest()[:24],
                 'job_key': hashlib.sha256((profile + ':' + jid).encode()).hexdigest()[:24],
                 'profile': profile, 'label': ' '.join(str(job.get('name') or 'Задание Hermes').split())[:150],
-                'state': 'planned' if job.get('enabled') is True else 'paused', 'origin': 'scheduled',
+                'state': 'planned' if job.get('enabled') is True else 'paused' if job.get('enabled') is False else 'unknown', 'origin': 'scheduled',
                 'claimed_at': None, 'started_at': None, 'finished_at': None, 'progress_at': None,
                 'observed_at': now, 'liveness': 'not_applicable',
                 'next_run_at': timestamp(job.get('next_run_at')) if job.get('enabled') is True else None,

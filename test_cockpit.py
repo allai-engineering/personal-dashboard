@@ -118,6 +118,17 @@ class CockpitContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             stage_auth(auth)
 
+    def test_missing_or_invalid_enabled_is_not_a_paused_schedule(self):
+        root = Path(self.tmp.name) / 'hermes'
+        cron = root / 'cron'; cron.mkdir(parents=True)
+        (cron / 'jobs.json').write_text(json.dumps({'jobs': [
+            {'id': 'missing', 'name': 'Synthetic unknown'},
+            {'id': 'invalid', 'name': 'Synthetic invalid', 'enabled': 'false'},
+            {'id': 'paused', 'name': 'Synthetic paused', 'enabled': False}]}))
+        rows = cockpit_read.hermes(root)['tasks']
+        self.assertEqual([(t['state'], t['enabled']) for t in rows],
+                         [('unknown', None), ('unknown', None), ('paused', False)])
+
 
 if __name__ == '__main__':
     unittest.main()
