@@ -1,8 +1,13 @@
 """Allowlisted Court/execution observations; no prompts, documents or operational actions."""
 import datetime as dt
 import re
+import importlib.util
+from pathlib import Path
 
-from operations import exact, number, text, timestamp
+_spec = importlib.util.spec_from_file_location('cockpit_operations', Path(__file__).resolve().with_name('operations.py'))
+_ops = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_ops)
+exact, number, text, timestamp = _ops.exact, _ops.number, _ops.text, _ops.timestamp
 
 SCHEMA = 'captain-cockpit-v1'
 PROFILES = {'default', 'ops', 'dashboard-dev', 'lawyer', 'monitor', 'research'}

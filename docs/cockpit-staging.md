@@ -1,5 +1,7 @@
 # Isolated Captain Cockpit review
 
+Historical staging procedure. The owner subsequently authorized the public integration release described in [cockpit-production.md](cockpit-production.md); ordinary UI-broker permissions remain unchanged.
+
 This candidate is not installed in production. It uses the existing authenticated file-only HTTP server and a separate, owner-private staging directory outside every Git checkout. There is no provider generation, production collector trigger or new schedule.
 
 ## Private capture

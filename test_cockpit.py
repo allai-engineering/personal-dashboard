@@ -7,6 +7,7 @@ from pathlib import Path
 import tempfile
 import sqlite3
 import sys
+import subprocess
 import unittest
 
 import server
@@ -44,6 +45,19 @@ class CockpitContractTests(unittest.TestCase):
         self.assertEqual(value['court']['status'], 'partial')
         self.assertEqual(value['court']['carried_forward'], 2)
         self.assertFalse(value['court']['confirmed_dates_available'])
+
+    def test_sidecar_works_in_the_production_isolated_python_runtime(self):
+        self.side.write_text(json.dumps(fixture(self.now)))
+        code = '''import importlib.util,sys,datetime as dt
+spec=importlib.util.spec_from_file_location('dashboard',sys.argv[1])
+server=importlib.util.module_from_spec(spec);spec.loader.exec_module(server)
+value=server.SnapshotFile(sys.argv[2],lambda:dt.datetime.fromisoformat(sys.argv[4]),cockpit_path=sys.argv[3]).get()
+assert value['cockpit']['court']['status']=='partial'
+'''
+        result = subprocess.run([sys.executable, '-I', '-B', '-c', code,
+            str(Path(server.__file__).resolve()), str(self.base), str(self.side), self.now.isoformat()],
+            capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_future_sidecar_is_not_fresh_evidence(self):
         value = fixture(self.now + dt.timedelta(hours=1))

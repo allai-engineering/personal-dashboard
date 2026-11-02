@@ -37,6 +37,8 @@ assert.equal(view.events.length,0,'unknown hearing dates do not become events');
 const stale=overview(snapshot,[],{balances:[],machines:[],integrated:[]},now+180001,false);
 assert.equal(stale.activeTasks.length,0);
 assert.equal(stale.cockpitFresh,false);
+assert.equal(stale.coverageFresh,true,'a fifteen-minute publication remains valid as historical coverage');
+assert.equal(stale.courtFresh,true,'court evidence keeps its original source age, separate from process liveness');
 assert.equal(view.records.find(r=>r.id==='job-result-scheduled-scheduled').state,'open');
 const dated=structuredClone(snapshot);
 dated.cockpit.events=[{id:'today',title:'Synthetic hearing',at:'2026-11-02',date_kind:'hearing',confirmed:true,observed_at:stamp,source:'Synthetic source'}];

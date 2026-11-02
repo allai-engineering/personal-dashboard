@@ -55,14 +55,15 @@ export function overview(snapshot,accounts,resources,now=Date.now(),transportErr
   add({id:'integration-'+r.key,domain:r.page,title:r.title,state:observed&&['critical','warning'].includes(r.tone)?'open':r.current&&r.tone==='ok'?'clear':'unknown',tone:r.tone,reason:JSON.stringify([r.problem||'integration',...measurements]),observedAt:r.observed_at,detail:r.problem||'Сведения интеграции',evidence:[['Источник',r.source],['Наблюдение',dateLabel(r.observed_at)],...(r.kind==='account'?[['Неделя',r.weekly_remaining==null?'Неизвестно':r.weekly_remaining+'%'],['5 часов',r.five_hour_remaining==null?'Неизвестно':r.five_hour_remaining+'%']]:r.kind==='balance'?[['Значение',r.value==null?'Неизвестно':r.value+' '+(r.unit||'')]]:[])],next:'Открыть источник'});
  }
  const data=snapshot?.cockpit,c=data?.court,cockpitFresh=!transportError&&freshAt(data?.collected_at,now,120);
- const courtFresh=cockpitFresh&&freshAt(c?.observed_at,now,129600);
+ const coverageFresh=!transportError&&freshAt(data?.collected_at,now,1800);
+ const courtFresh=coverageFresh&&freshAt(c?.observed_at,now,129600);
  const courtFacts=c?[
   ['Общий охват',c.status],['Состояние поиска',c.search_status],['Непроверенных записей',count(c.unverified)],['Перенесено из прошлых наблюдений',count(c.carried_forward)],['Дел КАД в сохранённом состоянии',count(c.known_cases)],
   ['Область отдельной квитанции',c.receipt_scope],['Результат отдельной квитанции',c.receipt_status],['Изменений в области этой квитанции',count(c.changes)],['Отмечено сборщиком как важное',count(c.important)],['Дата отдельной квитанции',dateLabel(c.receipt_observed_at)],
   ['Будущие заседания',c.confirmed_dates_available?'Есть структурированные подтверждения':'Подтверждённый список недоступен']]:[['Источник','Не подключён или не прошёл проверку']];
  add({id:'court-coverage',domain:'courts',title:'Проверка судов: '+(c?.status==='ok'?'охват подтверждён':'охват неполный'),state:courtFresh?(c.status==='ok'?'clear':c.status==='unavailable'?'unknown':'open'):'unknown',tone:'warning',reason:JSON.stringify(['court-coverage',c?.status,c?.search_status,c?.unverified,c?.carried_forward]),owner:'Ответственный не подтверждён',observedAt:c?.observed_at,
   detail:'Непроверено: '+count(c?.unverified)+' · перенесено: '+count(c?.carried_forward)+'. Это полнота данных, не оценка юридического риска.',evidence:courtFacts,next:'Открыть судебную сводку'});
- const tasks=(data?.tasks||[]).map(t=>({...t,active:cockpitFresh&&freshAt(t.observed_at,now,120)&&['running','claimed'].includes(t.state)&&t.liveness==='verified',fresh:cockpitFresh&&freshAt(t.observed_at,now,120)})).sort((a,b)=>Number(b.active)-Number(a.active)||(Date.parse(b.claimed_at)||0)-(Date.parse(a.claimed_at)||0));
+ const tasks=(data?.tasks||[]).map(t=>({...t,active:cockpitFresh&&freshAt(t.observed_at,now,120)&&['running','claimed'].includes(t.state)&&t.liveness==='verified',fresh:coverageFresh&&freshAt(t.observed_at,now,1800)})).sort((a,b)=>Number(b.active)-Number(a.active)||(Date.parse(b.claimed_at)||0)-(Date.parse(a.claimed_at)||0));
  const nextRuns=new Set();
  for(const t of tasks){
   if(t.state==='failed'||t.state==='completed')add({id:'job-result-'+(t.job_key||t.id)+'-'+t.origin,domain:'hermes',title:t.label+' · '+(t.origin==='scheduled'?'плановый запуск':'ручной запуск'),state:t.fresh?(t.state==='failed'?'open':'clear'):'unknown',tone:'warning',reason:'execution-failed-'+t.id,owner:'Профиль '+t.profile,observedAt:t.finished_at||t.observed_at,detail:'Сохранён результат процесса: '+(t.state==='failed'?'ошибка':'завершён')+'. Ручной повтор не заменяет результат планового запуска.',evidence:[['Профиль',t.profile],['Источник запуска',t.origin],['Результат',t.state],['Завершение',dateLabel(t.finished_at)]],next:'Посмотреть результат запуска'});
@@ -70,8 +71,8 @@ export function overview(snapshot,accounts,resources,now=Date.now(),transportErr
    nextRuns.add(t.job_key||t.id);events.push({id:'job-next-'+(t.job_key||t.id),title:t.label,at:t.next_run_at,kind:'Запланирован запуск · '+t.profile,source:'Сохранённое расписание Hermes',observedAt:t.observed_at});
   }
  }
- for(const e of data?.events||[])if(cockpitFresh&&e.confirmed&&e.date_kind!=='inferred'&&freshAt(e.observed_at,now,129600))events.push({id:e.id,title:e.title,at:e.at,kind:{hearing:'Заседание',confirmed_deadline:'Подтверждённый срок',publication:'Дата публикации'}[e.date_kind],source:e.source,observedAt:e.observed_at,dateOnly:/^\d{4}-\d{2}-\d{2}$/.test(e.at)});
- return {records,retired,tasks,activeTasks:tasks.filter(t=>t.active),cockpitFresh,courtFresh,courtFacts,court:c,profiles:data?.profiles||[],
+ for(const e of data?.events||[])if(coverageFresh&&e.confirmed&&e.date_kind!=='inferred'&&freshAt(e.observed_at,now,129600))events.push({id:e.id,title:e.title,at:e.at,kind:{hearing:'Заседание',confirmed_deadline:'Подтверждённый срок',publication:'Дата публикации'}[e.date_kind],source:e.source,observedAt:e.observed_at,dateOnly:/^\d{4}-\d{2}-\d{2}$/.test(e.at)});
+ return {records,retired,tasks,activeTasks:tasks.filter(t=>t.active),cockpitFresh,coverageFresh,courtFresh,courtFacts,court:c,profiles:data?.profiles||[],
   events:events.filter(e=>{
    if(e.dateOnly){const day=ms=>new Date(ms+3*3600000).toISOString().slice(0,10);return e.at>=day(now)&&e.at<=day(now+7*86400000);}
    const at=Date.parse(e.at);return Number.isFinite(at)&&at>=now&&at<=now+7*86400000;

@@ -259,8 +259,10 @@ class SnapshotFile:
             value['cockpit'] = None
             if self.cockpit_path is not None:
                 try:
-                    from cockpit import validate as validate_cockpit
-                    value['cockpit'] = validate_cockpit(json.loads(read_regular(self.cockpit_path, 524288),
+                    spec = importlib.util.spec_from_file_location('dashboard_cockpit', Path(__file__).resolve().with_name('cockpit.py'))
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    value['cockpit'] = module.validate(json.loads(read_regular(self.cockpit_path, 524288),
                         parse_constant=reject_json_constant, parse_float=finite_json_float), now=now)
                 except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
                     value['cockpit'] = None

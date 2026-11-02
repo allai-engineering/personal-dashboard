@@ -47,7 +47,7 @@ def remote(source, kind, root, sudo=False):
     cmd = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', '-T']
     if source.get('ssh_config'):
         cmd += ['-F', str(Path(source['ssh_config']).expanduser())]
-    code = Path(__file__).with_name('cockpit_read.py').read_bytes()
+    code = (Path(__file__).resolve().parents[1] / 'release/cockpit_read.py').read_bytes()
     if kind == 'verifier':
         # Copy only the existing password verifier through a private encrypted pipe;
         # the production session-signing key is never transferred.

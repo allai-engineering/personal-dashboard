@@ -71,7 +71,7 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  const ordered=[...active.values()].sort((a,b)=>Number(b.tone==='critical')-Number(a.tone==='critical')||Number(b.unconfirmed)-Number(a.unconfirmed));
  const expanded=ordered.filter(r=>!compact(r,seenForRows)),viewed=ordered.filter(r=>compact(r,seenForRows));
  const gaps=view.records.filter(r=>r.state==='unknown'&&!active.has(r.id));
- $('cockpit-coverage').replaceChildren(el('strong',`${active.size} нерешённых · ${gaps.length} пробелов`),el('p',view.cockpitFresh?'Сохранённые данные прочитаны · актуальность каждого замера — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
+ $('cockpit-coverage').replaceChildren(el('strong',`${active.size} нерешённых · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
  $('cockpit-count').textContent=expanded.length+' записей';
  $('cockpit-decisions').replaceChildren(...expanded.map(r=>row(r,now)));
  if(!expanded.length)$('cockpit-decisions').append(el('p',active.size?'Остальное просмотрено и остаётся нерешённым ниже.':'Подтверждённых нерешённых проблем в доступных данных нет. Это не подтверждение полного охвата.','cockpit-empty'));
@@ -91,7 +91,7 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  if(!view.activeTasks.length)$('cockpit-active').append(el('p','Подтверждённых активных исполнений нет. Это не доказательство простоя: журнал может быть неполным.','cockpit-empty'));
  $('hermes-tasks').replaceChildren(...taskRecords.map(r=>row(r,now,{scope:'tasks'})));
  if(!taskRecords.length)$('hermes-tasks').append(el('p','Записи исполнений недоступны.','cockpit-empty'));
- $('hermes-coverage').textContent=(view.cockpitFresh?'Снимок журналов получен. ':'Снимок журналов устарел. ')+view.profiles.map(p=>p.id+': '+word(p.status)+(p.stored_jobs==null?'':' · '+p.stored_jobs+' заданий')).join(' / ');
+ $('hermes-coverage').textContent=(view.coverageFresh?'Снимок журналов получен. ':'Снимок журналов устарел. ')+view.profiles.map(p=>p.id+': '+word(p.status)+(p.stored_jobs==null?'':' · '+p.stored_jobs+' заданий')).join(' / ');
  $('court-summary').replaceChildren(el('h2',view.courtFresh&&view.court?.status==='ok'?'Охват подтверждён':'Суды: охват неполный'),el('p','Статус отдельного сборщика относится только к указанной области проверки. Он не закрывает пробелы других источников.'));
  if(!view.courtFresh)$('court-summary').append(el('p','Нет свежего подтверждения состояния судов.','notice'));
  $('court-summary').append(table(view.courtFacts),el('p','Заседания и процессуальные сроки появятся только при наличии структурированного подтверждения. По текстовым упоминаниям даты не вычисляются.','muted small'));

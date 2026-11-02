@@ -1,5 +1,7 @@
 # Captain Cockpit v1 — approved isolated working copy
 
+Current follow-up authorization: the owner subsequently requested public installation with the existing update cadence, password-only/30-day login, CPA and limits preserved. The staging decisions below describe the first iteration; [cockpit-production.md](cockpit-production.md) governs the separately reviewed core integration release.
+
 ## Problem Statement
 
 The owner needs a one-minute briefing of decisions, upcoming events and actual Hermes work. The existing resource dashboard lacks court coverage and execution evidence. A red observation must be explainable without implying that unknown data is healthy or that an agent is already repairing it.
