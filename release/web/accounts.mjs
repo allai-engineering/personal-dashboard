@@ -1,3 +1,4 @@
+import {renderCockpit} from './cockpit.mjs';
 import {initNavigation,renderOperations} from './operations.mjs';
 import {number,numeric,emptyMessage} from './model.mjs';
 import {snapshotFresh,capacityView} from './limits.mjs';
@@ -82,7 +83,8 @@ function render(){
   for(const [key,label] of [['15','15 минут'],['60','Час'],['1440','Сутки']]){const m=a.windows?.[key];details.append(el('p',m?`${label}: ${number(m.failed)} ошибок / ${number(m.attempt_records)} записей попыток${v.fresh?'':' · старый снимок'}`:`${label}: статистика неизвестна`,'small'));if(m&&Object.keys(m.status_codes||{}).length)details.append(el('p','Коды: '+Object.entries(m.status_codes).map(([code,n])=>`${code} × ${number(n)}`).join(', '),'muted small'));}
   details.append(el('p','Ошибка попытки не равна сбою запроса: повтор мог завершиться успешно. Коды Keeper не различают upstream и локальный отказ. Отсутствие ограничений CPA не гарантирует успешную генерацию.','muted small'));card.append(details);(v.authorizationIssue?authCards:cards).append(card);
  }
- renderOperations(effective,transportError,now,all);
+ const resources=renderOperations(effective,transportError,now);
+ renderCockpit(effective,all,resources,now,transportError);
  const cap=fresh?capacityView(snapshot?.runtime):null;
  $('capacity').textContent=cap?`В выборке плагина занято ${number(cap.used)} из ${number(cap.limit)} слотов. Охват: ${number(cap.count)} из ${number(snapshot?.inventory?.listed_accounts)} аккаунтов; это не общая свободная ёмкость.`:'Общая текущая занятость неизвестна: нет пригодного полного измерения.';
  const p=snapshot?.runtime?.policy;
@@ -96,7 +98,8 @@ async function load(manual=false){
  finally{clearTimeout(timer);busy=false;$('refresh').disabled=false;render();}
 }
 initNavigation();
+addEventListener('hashchange',render);
 $('refresh').addEventListener('click',()=>load(true));$('search').addEventListener('input',render);
 setInterval(()=>{if(!document.hidden)load();},60000);
-setInterval(()=>{if(snapshot&&!document.hidden&&!document.activeElement?.closest('.account'))render();},15000);
+setInterval(()=>{if(snapshot&&!document.hidden&&!document.activeElement?.closest('.account,.cockpit-ledger,#evidence-content'))render();},15000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});load();

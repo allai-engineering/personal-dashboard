@@ -1,18 +1,18 @@
 import {integrationRows} from './integrations-view.mjs';
 const operationIcons={"27": "/assets/cutout-27-c9bc9c75f9dd.png", "1": "/assets/cutout-1-cafa1f33bb15.png", "21": "/assets/cutout-21-ec68832ade0e.png", "42": "/assets/cutout-42-f0cbed3e8905.png", "51": "/assets/cutout-51-786235fc9dca.png", "34": "/assets/cutout-34-ab09e3bda00e.png", "16": "/assets/cutout-16-c315cbc1b9b9.png"};
 import {sortedBalances,sortedMachines,freshAt} from './operations-view.mjs';
-import {relativeTime,dateLabel,windowLabel} from './account-view.mjs';
+import {relativeTime,dateLabel} from './account-view.mjs';
 const $=id=>document.getElementById(id), el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const amount=(n,unit)=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:unit==='credits'?0:2}).format(n)+(unit==='credits'?' кр.':' $');
 const kinds={physical:'Сервер',physical_mac:'Mac',cloud_vm:'Облачная VM',virtual_machine:'VM',wsl_guest:'WSL',managed_kubernetes_node:'Узел Kubernetes',physical_router:'Роутер',services:'Приложения и бэкапы',unknown:'Тип не подтверждён'};
-const pages={overview:'Обзор',subscriptions:'Подписки',balances:'Балансы',machines:'Машины'};
+const pages={overview:'Мостик',courts:'Суды',subscriptions:'Подписки',balances:'Балансы',machines:'Машины',hermes:'Hermes',evidence:'Доказательства'};
 let latest=null;
 export function initNavigation(){
  function show(){
-  const page=Object.hasOwn(pages,location.hash.slice(1))?location.hash.slice(1):'overview';
+  const route=location.hash.slice(1).split('/')[0],page=Object.hasOwn(pages,route)?route:'overview';
   for(const [id,title] of Object.entries(pages)){
    $('page-'+id).hidden=page!==id;
-   const link=$('nav-'+id);link.classList.toggle('active',page===id);if(page===id)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
+   const link=$('nav-'+id);if(!link)continue;link.classList.toggle('active',page===id);if(page===id)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
   }
   $('page-title').textContent=pages[page];
   if(latest)observation(...latest);
@@ -60,10 +60,6 @@ function machineCard(m,now,open){
  d.append(el('p','Источник — Hermes. Доступность машины не доказывает работу приложения. Список включает VM, устройства и неподтверждённые записи.','muted small'));
  return card;
 }
-function row(item){
- const a=el('a',null,'attention-row '+item.tone);a.href='#'+item.page;
- const body=el('div',null,'row-text');body.append(el('strong',item.title),el('p',item.text,'small'));a.append(icon(item.text.includes('диске')?21:item.tone==='critical'?16:27),body,el('span','›','arrow'));return a;
-}
 function integrationCard(r,now,open){
  const card=el('article',null,'account resource-card '+r.tone);
  const head=el('div',null,'service-top');head.append(el('h2',r.title),badge(r.tone));card.append(head);
@@ -76,7 +72,7 @@ function integrationCard(r,now,open){
  card.append(el('p',`Данные ${relativeTime(r.observed_at,now)}`,'muted small'));
  const d=disclosure(card,'integration-'+r.key,open);detail(d,'Источник',r.source);detail(d,'Замер',dateLabel(r.observed_at));return card;
 }
-export function renderOperations(snapshot,transportError,now,accounts){
+export function renderOperations(snapshot,transportError,now){
  latest=[snapshot,transportError,now];observation(...latest);
  const ops=snapshot?.operations,balances=sortedBalances(ops,now,transportError),machines=sortedMachines(ops,now,transportError);
  const open=new Set([...document.querySelectorAll('details[data-operation][open]')].map(n=>n.dataset.operation));
@@ -94,22 +90,5 @@ export function renderOperations(snapshot,transportError,now,accounts){
   if(!root){root=el('div',null,'accounts');root.id='integrations-'+page;$('page-'+page).append(root);}
   root.replaceChildren(...integrated.filter(r=>r.page===page).map(r=>integrationCard(r,now,open)));
  }
- const attention=integrated.filter(r=>['critical','warning'].includes(r.tone)).map(r=>({page:r.page,tone:r.tone,title:r.title,text:r.problem||'Маленький остаток квоты'}));
- for(const m of machines)if(['critical','warning'].includes(m.tone))attention.push({page:'machines',tone:m.tone,title:m.id==='applications'?'Приложения и бэкапы':m.id,text:m.message+' · '+relativeTime(m.active[0]?.observed_at,now)});
- for(const b of balances)if(['critical','warning'].includes(b.tone))attention.push({page:'balances',tone:b.tone,title:b.title,text:b.problem+' · '+amount(b.amount,b.unit)});
- for(const a of accounts){
-  const low=a.view.windows.filter(w=>w.state==='observed'&&[300,10080].includes(w.window_minutes)&&w.remaining<25).sort((x,y)=>x.remaining-y.remaining)[0];
-  if(low)attention.push({page:'subscriptions',tone:low.remaining<10?'critical':'warning',title:a.account.login||a.account.label,text:windowLabel(low.window_minutes)+': осталось '+Math.round(low.remaining)+'%'});
-  if(a.view.authorizationIssue)attention.push({page:'subscriptions',tone:'warning',title:a.account.login||a.account.label,text:'Нужно восстановить авторизацию'});
- }
- attention.sort((a,b)=>(a.tone==='critical'?0:1)-(b.tone==='critical'?0:1));
- $('attention-count').textContent=attention.length?`${attention.length} записей требуют внимания`:'Подтверждённых проблем в доступных данных нет';
- $('attention-list').replaceChildren(...attention.slice(0,6).map(row));
- const more=$('attention-more');more.hidden=attention.length<=6;$('attention-more-count').textContent=`Ещё ${Math.max(0,attention.length-6)}`;$('attention-rest').replaceChildren(...attention.slice(6).map(row));
- const unknown=balances.filter(b=>b.tone==='unknown').map(b=>({title:b.title,text:b.problem,page:'balances',tone:'unknown'}));
- unknown.push(...machines.filter(m=>m.tone==='unknown').map(m=>({title:m.id,text:m.message,page:'machines',tone:'unknown'})));
- unknown.push(...integrated.filter(r=>r.tone==='unknown').map(r=>({page:r.page,tone:r.tone,title:r.title,text:r.problem})));
- $('unknown-summary').textContent=`Нет подтверждённых данных: ${unknown.length}`;$('unknown-rows').replaceChildren(...unknown.map(row));$('unknown-block').hidden=!unknown.length;
- $('overview-balances').replaceChildren(...balances.map(b=>{const a=el('a',null,'balance-summary '+b.tone);a.href='#balances';a.append(el('span',b.title),el('strong',b.amount===null?'Нет данных':b.billed?'Начислено '+amount(b.amount,b.unit):b.noPrepayment?'Предоплаты нет':amount(b.amount,b.unit)));return a;}));
- $('overview-machines').textContent=typeof count==='number'?`Машины и устройства · ${count} записей →`:'Машины · охват неизвестен →';
+ return {balances,machines,integrated};
 }

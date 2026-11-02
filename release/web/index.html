@@ -1,15 +1,22 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Личный дашборд</title><link rel="stylesheet" href="/accounts.css"><script type="module" src="/accounts.mjs"></script></head><body>
 <main>
-<header class="page-head"><div><p class="eyebrow">Личный дашборд · только чтение</p><img class="dashboard-avatar" src="/assets/cutout-1-cafa1f33bb15.png" alt="" width="32" height="32"><h1 id="page-title">Обзор</h1><p id="observation" class="muted">Получаем данные…</p></div><button id="refresh" type="button">Обновить</button></header>
+<header class="page-head"><div><p class="eyebrow">Личный дашборд · только чтение</p><img class="dashboard-avatar" src="/assets/cutout-1-cafa1f33bb15.png" alt="" width="32" height="32"><h1 id="page-title">Мостик</h1><p id="observation" class="muted">Получаем данные…</p></div><button id="refresh" type="button">Обновить</button></header>
 <nav class="dashboard-nav" aria-label="Разделы">
-<a id="nav-overview" href="#overview">Обзор</a><a id="nav-subscriptions" href="#subscriptions">Подписки</a><a id="nav-balances" href="#balances">Балансы</a><a id="nav-machines" href="#machines">Машины</a></nav>
+<a id="nav-overview" href="#overview">Мостик</a><a id="nav-courts" href="#courts">Суды</a><a id="nav-subscriptions" href="#subscriptions">Подписки</a><a id="nav-balances" href="#balances">Балансы</a><a id="nav-machines" href="#machines">Машины</a><a id="nav-hermes" href="#hermes">Hermes</a></nav>
 <div id="operations-notice" class="notice" role="status" hidden></div>
-<section id="page-overview" aria-label="Обзор">
-<section class="attention-panel"><div class="attention-head"><h2>Требуют внимания</h2><p id="attention-count" class="muted small">Получаем данные…</p></div><div id="attention-list"></div><details id="attention-more" hidden><summary id="attention-more-count">Ещё</summary><div id="attention-rest"></div></details></section>
-<details id="unknown-block" class="unknown-block" hidden><summary id="unknown-summary">Нет подтверждённых данных</summary><div id="unknown-rows"></div></details>
-<h2 class="block-title">Балансы</h2><div id="overview-balances" class="balance-summaries"></div>
-<a id="overview-machines" class="section-link" href="#machines">Машины</a>
+<p class="muted small">Captain Cockpit · «Обновить» перечитывает последние данные. Сборщики работают по расписанию; из браузера агенты и сервисы не запускаются.</p>
+<section id="page-overview" aria-label="Мостик">
+<div id="cockpit-coverage" class="cockpit-coverage" role="status"></div>
+<section class="cockpit-section"><div class="cockpit-heading"><h2>Решить сейчас</h2><span id="cockpit-count" class="muted small"></span></div><div id="cockpit-decisions" class="cockpit-ledger"></div></section>
+<details id="cockpit-seen" class="cockpit-fold" hidden><summary id="cockpit-seen-count">Просмотрено · не решено</summary><div id="cockpit-seen-list" class="cockpit-ledger"></div></details>
+<details id="cockpit-unknown" class="cockpit-fold"><summary id="cockpit-unknown-count">Пробелы в данных</summary><div id="cockpit-unknown-list" class="cockpit-ledger"></div></details>
+<section class="cockpit-section"><div class="cockpit-heading"><h2>Впереди · 7 дней</h2></div><div id="cockpit-events" class="cockpit-ledger"></div></section>
+<section class="cockpit-section"><div class="cockpit-heading"><h2>Hermes занимается</h2><a href="#hermes">Все записи →</a></div><div id="cockpit-active" class="cockpit-ledger"></div></section>
+<div id="cockpit-domains" class="cockpit-domains"></div>
 </section>
+<section id="page-courts" aria-label="Суды" hidden><div id="court-summary" class="cockpit-sheet"></div></section>
+<section id="page-hermes" aria-label="Hermes" hidden><p class="muted small">Плановый запуск и ручной повтор показаны отдельно. Завершённый процесс не подтверждает полноту проверки предметной области.</p><div id="hermes-coverage" class="cockpit-coverage"></div><div id="hermes-tasks" class="cockpit-ledger"></div></section>
+<section id="page-evidence" aria-label="Доказательства" hidden><div id="evidence-content" class="cockpit-sheet"></div></section>
 <section id="page-subscriptions" aria-label="Подписки" hidden>
 <div id="notice" class="notice" role="status" hidden></div>
 <div class="toolbar"><p id="account-count">Количество аккаунтов неизвестно</p><label class="search"><span class="sr-only">Поиск по аккаунтам</span><input id="search" type="search" placeholder="Поиск по аккаунтам" autocomplete="off"></label></div>

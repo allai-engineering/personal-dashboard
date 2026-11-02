@@ -201,8 +201,9 @@ def authenticated(headers, auth):
 
 class SnapshotFile:
     """Read only the publisher's fixed file; HTTP never invokes collection."""
-    def __init__(self, path, clock=lambda: dt.datetime.now(dt.timezone.utc)):
+    def __init__(self, path, clock=lambda: dt.datetime.now(dt.timezone.utc), cockpit_path=None):
         self.path, self.clock = Path(path), clock
+        self.cockpit_path = Path(cockpit_path) if cockpit_path is not None else None
         self.value = None
         self.lock = threading.Lock()
 
@@ -255,6 +256,16 @@ class SnapshotFile:
                 value['integrations'] = _int.validate_integrations(json.loads(read_regular(self.path.parent/'integrations.json',1048576),parse_constant=reject_json_constant,parse_float=finite_json_float))
             except (OSError,ValueError,TypeError,KeyError,AttributeError,OverflowError,RecursionError):
                 value['integrations'] = None
+            value['cockpit'] = None
+            if self.cockpit_path is not None:
+                try:
+                    spec = importlib.util.spec_from_file_location('dashboard_cockpit', Path(__file__).resolve().with_name('cockpit.py'))
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    value['cockpit'] = module.validate(json.loads(read_regular(self.cockpit_path, 524288),
+                        parse_constant=reject_json_constant, parse_float=finite_json_float), now=now)
+                except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
+                    value['cockpit'] = None
             value['cache'] = {'fetched_at_utc': observed_text, 'age_seconds': None if age is None else round(age, 1),
                 'stale': error is not None or age is None or age < 0 or age >= 120,
                 'refresh_in_progress': False, 'last_error': error,
@@ -459,6 +470,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8766)
     parser.add_argument('--snapshot-file', type=Path)
+    parser.add_argument('--cockpit-file', type=Path)
     parser.add_argument('--public-origin', type=public_origin)
     parser.add_argument('--auth-file', type=Path)
     args = parser.parse_args()
@@ -466,6 +478,8 @@ def main():
         parser.error('port must be between 1024 and 65535')
     if args.snapshot_file is not None and not args.snapshot_file.is_absolute():
         parser.error('snapshot-file must be an absolute path')
+    if args.cockpit_file is not None and (not args.cockpit_file.is_absolute() or args.snapshot_file is None):
+        parser.error('cockpit-file requires absolute file paths and snapshot-file mode')
     if args.public_origin and args.snapshot_file is None:
         parser.error('public-origin requires snapshot-file mode')
     if args.public_origin and args.auth_file is None:
@@ -475,7 +489,7 @@ def main():
     except ValueError as error:
         parser.error(str(error))
     server = DashboardServer(('127.0.0.1', args.port), Handler)
-    server.snapshot_cache = SnapshotFile(args.snapshot_file) if args.snapshot_file else SnapshotCache()
+    server.snapshot_cache = SnapshotFile(args.snapshot_file, cockpit_path=args.cockpit_file) if args.snapshot_file else SnapshotCache()
     server.public_origin = args.public_origin
     server.auth = auth
     print('CPA dashboard: http://127.0.0.1:' + str(args.port), flush=True)
