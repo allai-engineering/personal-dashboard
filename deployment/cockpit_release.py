@@ -71,9 +71,13 @@ def guard(policy):
 
 
 def restore(files):
+    errors=[]
     for path,item in files.items():
-        if item is None:path.unlink(missing_ok=True)
-        else:ui.atomic(path,item['body'],mode=item['mode'],gid=item['gid'])
+        try:
+            if item is None:path.unlink(missing_ok=True)
+            else:ui.atomic(path,item['body'],mode=item['mode'],gid=item['gid'])
+        except OSError:errors.append('file_restore_failed')
+    return errors
 
 
 def verify_sidecar():
@@ -150,11 +154,19 @@ def apply(payload):
         ui.atomic(backup/'receipt.json',json.dumps(receipt).encode(),0o600)
         return receipt
     except Exception:
-        command(['systemctl','disable','--now','dashboard-cockpit.timer'])
-        command(['systemctl','stop','dashboard-cockpit.service'],timeout=60)
-        restore(saved)
-        if ui.CURRENT.resolve()==new:ui.switch(old)
-        command(['systemctl','daemon-reload']);ui.restart();ui.health(cookie,{})
+        errors=[]
+        for args in (['systemctl','disable','--now','dashboard-cockpit.timer'],['systemctl','stop','dashboard-cockpit.service']):
+            try:command(args,timeout=60)
+            except Exception:errors.append('publisher_shutdown_failed')
+        errors+=restore(saved)
+        try:
+            if ui.CURRENT.resolve()==new:ui.switch(old)
+        except Exception:errors.append('release_restore_failed')
+        try:
+            command(['systemctl','daemon-reload']);ui.restart();ui.health(cookie,{})
+        except Exception:errors.append('restored_health_failed')
+        ui.atomic(backup/'rollback.json',json.dumps({'errors':errors,'previous':str(old)}).encode(),0o600)
+        if errors:ui.fail('rollback_incomplete')
         raise
 
 

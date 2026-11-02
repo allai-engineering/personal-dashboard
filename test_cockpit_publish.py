@@ -48,6 +48,18 @@ class CockpitPublisherTests(unittest.TestCase):
             self.assertNotIn('PRIVATE', json.dumps(saved))
             self.assertEqual(cockpit_publish.publish(root, config, now=now+dt.timedelta(minutes=5), court_read=unavailable)['status'], 'not_due')
 
+    def test_malformed_source_cannot_retain_a_recent_successful_receipt(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);now=dt.datetime.now(dt.timezone.utc)
+            previous=fixture(now-dt.timedelta(minutes=16));previous['court']['receipt_status']='ok'
+            (root/'cockpit.json').write_text(json.dumps(previous))
+            config={'hermes_home':str(root/'hermes'),'court_root':'/synthetic/court','court_alias':'court'}
+            result=cockpit_publish.publish(root,config,now=now,court_read=lambda _: {})
+            saved=json.loads((root/'cockpit.json').read_text())
+            self.assertEqual(result['status'],'partial')
+            self.assertEqual(saved['court']['receipt_status'],'unavailable')
+            self.assertIsNone(saved['court']['changes'])
+
 
 if __name__ == '__main__':
     unittest.main()

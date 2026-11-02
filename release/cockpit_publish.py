@@ -62,18 +62,25 @@ def publish(directory, config, now=None, court_read=fetch_court):
         if type(last) in (int, float) and now.timestamp() - last < 900:
             return {'status': 'not_due'}
         atomic(state_path, {'last_attempt': now.timestamp()})
+        value={'schema':schema.SCHEMA,'collected_at':now.isoformat(),'read_only':True,
+               'court':None,'tasks':[],'profiles':[],'events':[]}
         try:
-            court = court_read(config)
-        except (OSError, ValueError, subprocess.SubprocessError):
-            court = {'status': 'unavailable', 'observed_at': None, 'receipt_status': 'unavailable',
+            value['court'] = court_read(config)
+            schema.validate(value,now=now)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError, subprocess.SubprocessError):
+            value['court'] = {'status': 'unavailable', 'observed_at': None, 'receipt_status': 'unavailable',
                 'receipt_scope': 'unknown', 'receipt_observed_at': None, 'changes': None, 'important': None,
                 'unverified': None, 'carried_forward': None, 'search_status': 'unknown',
                 'confirmed_dates_available': False, 'known_cases': None}
-        hermes = reader.hermes(Path(config['hermes_home']))
-        value = schema.validate({'schema': schema.SCHEMA, 'collected_at': now.isoformat(), 'read_only': True,
-            'court': court, 'tasks': hermes['tasks'], 'profiles': hermes['profiles'], 'events': []}, now=now)
+        try:
+            hermes = reader.hermes(Path(config['hermes_home']))
+            value.update(tasks=hermes['tasks'],profiles=hermes['profiles'])
+            schema.validate(value,now=now)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
+            value.update(tasks=[],profiles=[{'id':p,'status':'unavailable','stored_jobs':None} for p in sorted(schema.PROFILES)])
+        schema.validate(value,now=now)
         atomic(directory / 'cockpit.json', value, 0o640)
-        return {'status': 'partial' if court['status'] == 'unavailable' else 'published'}
+        return {'status': 'partial' if value['court']['status'] == 'unavailable' else 'published'}
 
 
 if __name__ == '__main__':
