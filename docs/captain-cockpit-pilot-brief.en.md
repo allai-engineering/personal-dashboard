@@ -12,6 +12,8 @@ Read `AGENTS.md`, `GLOSSARY.md`, the configured domain/tracker documents, the cu
 
 The owner chose Captain Cockpit and four areas: Courts, Accounts & Money, Machines, Hermes. The agreed home order is Decide now, Coming next over seven days, Hermes is handling, then compact domain access. Urgent unresolved issues stay prominent; seen nonurgent issues become compact and return on worsening or deadline escalation. Viewing does not resolve a problem; recovery needs fresh evidence.
 
+The owner subsequently selected prototype B (chronological ledger / Лента) as the visual direction. Preserve A/C as research artifacts; do not treat the selection as acceptance of experimental seen/acknowledgement rules or production deployment.
+
 Preserve password-only sign-in and remembered sessions, read-only operational data, CPA/limits/plugins/routing, collection cadence, notification rules, unknown/stale/reset semantics and protected release gates. Use synthetic fixtures only. Real identities, documents, snapshots and credentials stay outside public Git/PR/CI.
 
 ## Prototype authorization and remaining decisions

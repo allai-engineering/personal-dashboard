@@ -9,6 +9,7 @@ Within one minute, the owner should understand what changed, what needs their de
 ### Approved by the owner
 
 - Captain Cockpit is the product direction.
+- The owner selected prototype B, the chronological ledger / Лента, as the visual direction on 2 November 2026. A and C remain comparison artifacts.
 - First-version areas: Courts, Accounts & Money, Machines, Hermes.
 - Home order: Decide now; Coming next, covering seven days; Hermes is handling; compact access to the four areas.
 - Urgent unresolved issues remain prominent. Seen nonurgent issues become compact and regain prominence after worsening or deadline escalation.
@@ -22,7 +23,7 @@ Within one minute, the owner should understand what changed, what needs their de
 - The proposed owner-attention criteria, court-card disclosure level and exact urgency thresholds.
 - Evidence detail navigation, history retention, grouping rules and this bounded generative presentation contract.
 
-There is no final confirmation that the active interview has reached shared understanding. The owner subsequently invoked `/prototype`, explicitly authorizing an exploratory artifact to help resolve the remaining decisions. That prototype is now on a separate branch; no variant or review-state policy is silently accepted. The interview's final confirmation still precedes production implementation, not this authorized discovery experiment. The proposal itself is not new production deployment authority.
+There is no final confirmation that the active interview has reached shared understanding. The owner invoked `/prototype`, explicitly authorizing an exploratory artifact, then selected its second option, B. The prototype is on a separate branch; selecting B does not accept a review-state policy or production release. The interview's final confirmation still precedes production implementation, not this authorized discovery experiment. The proposal itself is not new production deployment authority.
 
 ## 2. Current state and reusable parts
 

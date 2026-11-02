@@ -6,7 +6,7 @@ if(!['127.0.0.1','localhost','::1','[::1]'].includes(location.hostname)){
 selfCheck();
 let state=initial(),returnTo={route:'overview',focus:null,scroll:0};
 const $=id=>document.getElementById(id),h=(tag,text,cls)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;};
-const variant=()=>Object.hasOwn(variants,new URL(location.href).searchParams.get('variant'))?new URL(location.href).searchParams.get('variant'):'A';
+const variant=()=>Object.hasOwn(variants,new URL(location.href).searchParams.get('variant'))?new URL(location.href).searchParams.get('variant'):'B';
 const route=()=>location.hash.slice(1)||'overview';
 function button(text,action,id,cls){const b=h('button',text,cls);b.type='button';if(id)b.id=id;b.addEventListener('click',action);return b;}
 function dispatch(action){const focus=document.activeElement?.id,scroll=scrollY;state=apply(state,action);render();if(focus)$(focus)?.focus({preventScroll:true});scrollTo(0,scroll);}

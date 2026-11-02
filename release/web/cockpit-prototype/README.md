@@ -8,7 +8,7 @@ Run from the repository root:
 npm run prototype:cockpit
 ```
 
-Open `http://127.0.0.1:8880/?variant=A#overview`. The floating arrows switch between A (briefing), B (chronological ledger) and C (three-lane command deck). Left/right keyboard arrows also switch; form controls retain their normal arrow keys. All three are exploratory, not accepted product decisions.
+Open `http://127.0.0.1:8880/?variant=B#overview`. The owner selected B (chronological ledger / Лента) as the visual direction on 2 November 2026. B is also the default when no valid variant is supplied. The floating arrows retain A (briefing), B and C (three-lane command deck) for comparison. Left/right keyboard arrows also switch; form controls retain their normal arrow keys. Behaviour experiments remain unapproved unless separately recorded.
 
 The screen uses synthetic fixtures and an in-memory state. There is no backend connection, login, provider request, model request, persistent store or cross-device synchronization. It refuses to run on a non-loopback hostname. This is an isolated copy of the dashboard's overview shell, not a new production route; production sign-in and data fetching remain untouched.
 
@@ -27,4 +27,4 @@ This code is for a `prototype/captain-cockpit` branch only. It is not production
 
 [Compare static mobile designs on the canvas](https://superdesign.dev/teams/002e88be-3ad0-4e7b-b7ce-df6579371c74/projects/f09b83c6-3f19-4080-a3a8-cba57322f1fa). These are visual drafts, while interactions and the scenario laboratory run in the local prototype. All three imported draft IDs/versions were refetched and checked; no variant was selected on the owner's behalf.
 
-Verdict: awaiting owner review. No variant or review-state policy has been selected yet.
+Verdict: the owner selected the second option, B — Лента. This selects the overview's visual structure, not a review-state policy, live integration or production release. The other variants remain primary sources for comparison.
