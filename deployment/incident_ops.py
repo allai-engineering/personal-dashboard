@@ -33,7 +33,15 @@ def reconcile(previous,records,now):
    w['source_state']='unknown'
    if w['state']=='resolved':w.update(state='waiting',action='verify_recovery',blocker='awaiting_source',decision=None)
  if len(items)>200:raise ValueError('incident_capacity_exhausted')
- return {'schema':1,'observed_at':stamp,'items':list(items.values())}
+ return {'schema':1,'observed_at':stamp,'items':list(items.values()),'resume_generation':previous.get('resume_generation',0),'last_resume_at':previous.get('last_resume_at')}
+
+def continuation(state,evidence,now,schema):
+ rows={w['record_id']:w for w in evidence.get('items',[])}
+ if any(w['state']=='accepted' and w.get('execution_liveness')=='verified' and w.get('execution_state') in ('running','claimed') for w in rows.values()):return
+ pending=any(w['source_state']!='clear' and (w['state']=='queued' or w['state']=='accepted' and rows.get(w['record_id'],{}).get('execution_state') in ('completed','failed')) and (now-schema.stamp(w['updated_at'])).total_seconds()>=900 for w in state['items'])
+ last=state.get('last_resume_at')
+ if pending and (last is None or (now-schema.stamp(last)).total_seconds()>=3600):
+  state['resume_generation']=state.get('resume_generation',0)+1;state['last_resume_at']=now.isoformat()
 
 def live_execution(db_path,ancestors=None,proc=P('/proc')):
  if ancestors is None:
@@ -80,8 +88,9 @@ def main():
    body=json.dumps(snapshot,allow_nan=False).encode()
    run=subprocess.run(['/usr/local/bin/node',str(RELEASE/'incident_intake.mjs')],input=body,capture_output=True,timeout=12)
    if run.returncode or len(run.stdout)>524288:raise ValueError('intake_failed')
-   value=reconcile(previous,json.loads(run.stdout),now);atomic(CHECKPOINT,value)
-   result={'intake':sorted([w['record_id'],w['fingerprint']] for w in value['items'] if w['source_state']!='clear')}
+   value=reconcile(previous,json.loads(run.stdout),now)
+   continuation(value,reader.incident_work(HERMES_ROOT,now.isoformat()),now,schema);atomic(CHECKPOINT,value)
+   result={'intake':sorted([w['record_id'],w['fingerprint']] for w in value['items'] if w['source_state']!='clear'),'resume_generation':value['resume_generation']}
   elif sys.argv[1]=='status':
    print(json.dumps(previous));return
   else:
