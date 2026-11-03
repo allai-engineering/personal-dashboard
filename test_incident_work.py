@@ -20,6 +20,20 @@ class Incidents(unittest.TestCase):
   changed=ops.reconcile(again,[self.record(condition='service:critical')],later);self.assertEqual(changed['items'][0]['state'],'queued');self.assertIsNone(changed['items'][0]['execution_id'])
   clear=ops.reconcile(again,[self.record('clear')],later);self.assertEqual(clear['items'][0]['source_state'],'clear')
   recurrence=ops.reconcile(clear,[self.record()],later);self.assertEqual(recurrence['items'][0]['state'],'queued')
+ def test_previous_occurrence_report_cannot_claim_a_recurrence(self):
+  state=self.state();payload=self.payload(state['items'][0]);first=state['items'][0]['fingerprint']
+  state=ops.reconcile(state,[self.record('clear')],self.now);state=ops.reconcile(state,[self.record()],self.now)
+  self.assertNotEqual(state['items'][0]['fingerprint'],first)
+  with self.assertRaisesRegex(ValueError,'stale_incident'):ops.report(state,payload,'execution',self.now,schema)
+ def test_capacity_is_visible_and_keeps_existing_items(self):
+  records=[{**self.record(),'record_id':'machine-'+str(i)} for i in range(200)];state=ops.reconcile({},records,self.now)
+  with self.assertRaisesRegex(ValueError,'incident_capacity_exhausted'):ops.reconcile(copy.deepcopy(state),[{**self.record(),'record_id':'new'}],self.now)
+  self.assertEqual(len(state['items']),200)
+ def test_progress_preserves_existing_plane_identity(self):
+  state=self.state();state['items'][0]['task_ref']='TASK-EXAMPLE';payload=self.payload(state['items'][0])
+  ops.report(state,payload,'execution',self.now,schema);self.assertEqual(state['items'][0]['task_ref'],'TASK-EXAMPLE')
+  payload['task_ref']='OTHER-TASK'
+  with self.assertRaisesRegex(ValueError,'task_identity_change'):ops.report(state,payload,'execution',self.now,schema)
  def test_missing_source_suspends_an_old_resolution(self):
   state=self.state();state['items'][0].update(state='resolved',source_state='clear')
   value=ops.reconcile(state,[],self.now);self.assertEqual(value['items'][0]['state'],'waiting');self.assertEqual(value['items'][0]['blocker'],'awaiting_source')

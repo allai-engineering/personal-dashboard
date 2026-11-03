@@ -22,8 +22,8 @@ def reconcile(previous,records,now):
   if r['source_state']=='clear':
    if old:old.update(source_state='clear',source_at=r['source_at'])
    continue
-  fingerprint=hashlib.sha256(r['condition_key'].encode()).hexdigest()
-  if old and old['fingerprint']==fingerprint and old['source_state']!='clear':
+  fingerprint=hashlib.sha256(json.dumps([key,r['condition_key'],stamp,old.get('fingerprint') if old else None]).encode()).hexdigest()
+  if old and old['condition_key']==r['condition_key'] and old['source_state']!='clear':
    old.update(source_state=r['source_state'],source_at=r['source_at']);continue
   items[key]={**r,'fingerprint':fingerprint,'queued_at':stamp,'updated_at':stamp,'state':'queued','action':'diagnose','blocker':'none','decision':None,'task_ref':old.get('task_ref') if old else None,'execution_id':None}
  # Missing evidence preserves the incident and suspends decisions; it is never recovery.
@@ -31,7 +31,8 @@ def reconcile(previous,records,now):
   if key not in present:
    w['source_state']='unknown'
    if w['state']=='resolved':w.update(state='waiting',action='verify_recovery',blocker='awaiting_source',decision=None)
- return {'schema':1,'observed_at':stamp,'items':list(items.values())[-200:]}
+ if len(items)>200:raise ValueError('incident_capacity_exhausted')
+ return {'schema':1,'observed_at':stamp,'items':list(items.values())}
 
 def live_execution(db_path,ancestors=None,proc=P('/proc')):
  if ancestors is None:
@@ -56,6 +57,8 @@ def report(state,payload,execution_id,now,schema):
  if set(payload)!={'record_id','fingerprint','state','action','blocker','decision','task_ref'}:raise ValueError('report_fields')
  row=next((w for w in state['items'] if w['record_id']==payload['record_id']),None)
  if row is None or row['fingerprint']!=payload['fingerprint']:raise ValueError('stale_incident')
+ if row.get('task_ref') and payload['task_ref'] not in (None,row['task_ref']):raise ValueError('task_identity_change')
+ payload={**payload,'task_ref':payload['task_ref'] or row.get('task_ref')}
  candidate={**row,**payload,'execution_id':execution_id,'updated_at':now.isoformat()}
  public={k:v for k,v in candidate.items() if k!='execution_id'}
  public.update(execution_key=hashlib.sha256(('ops:'+execution_id).encode()).hexdigest()[:24],execution_state='running',execution_liveness='verified')
