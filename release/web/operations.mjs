@@ -27,6 +27,16 @@ function observation(snapshot,transportError,now){const view=observationView(sna
 function badge(tone){return el('span',{critical:'Важно',warning:'Внимание',unknown:'Нет данных',ok:'Замер получен'}[tone],'badge '+tone);}
 function detail(root,label,value){const p=el('p',null,'small');p.append(el('span',label+': ','muted'),document.createTextNode(value));root.append(p);}
 function disclosure(card,key,open){const d=el('details');d.dataset.operation=key;d.open=open.has(key);d.append(el('summary','Подробнее'));card.append(d);return d;}
+export function machineAction(m){
+ if(!m.hostFresh)return 'Получить свежий замер диагностики.';
+ if(m.state==='not_enrolled')return 'Подключить диагностику через подтверждённый доступ.';
+ if(m.state==='unreachable')return 'Проверить машину и восстановить канал диагностики.';
+ const codes=new Set(m.active.filter(i=>i.severity!=='unknown').map(i=>i.code));
+ if(codes.has('disk'))return 'Проверить, чем занят диск, и выбрать, что можно убрать.';
+ if(codes.has('backup'))return 'Проверить результат последней резервной копии.';
+ if(codes.has('service')||codes.has('application'))return 'Открыть проверку службы или приложения в «Подробнее».';
+ return ['critical','warning'].includes(m.tone)?'Открыть подробности проверки Hermes.':null;
+}
 function balanceCard(b,now,open){
  const card=el('article',null,'account resource-card '+b.tone);card.id='balance-'+b.id;
  const head=el('div',null,'service-top');head.append(el('h2',b.title),badge(b.tone));card.append(head);
@@ -47,6 +57,7 @@ function machineCard(m,now,open){
  const card=el('article',null,'account resource-card '+m.tone);card.id='machine-'+m.id;
  const head=el('div',null,'service-top');head.append(el('h2',m.id==='applications'?'Приложения и бэкапы':m.id),badge(m.tone));card.append(head);
  card.append(el('p',m.message,'resource-message'));
+ const action=machineAction(m);if(action)card.append(el('p','Что сделать: '+action,'small'));
  const when=m.active.find(i=>i.severity!=='unknown')?.observed_at||m.observed_at;
  card.append(el('p',`Замер ${relativeTime(when,now)}`,'muted small'));
  const d=disclosure(card,'machine-'+m.id,open);detail(d,'Тип',kinds[m.kind]);detail(d,'Проверка машины',dateLabel(m.observed_at));

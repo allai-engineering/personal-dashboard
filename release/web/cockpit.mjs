@@ -1,5 +1,6 @@
 import {overview,reconcile,compact,opaque} from './cockpit-view.mjs';
 import {dateLabel,relativeTime} from './account-view.mjs';
+import {machineAction} from './operations.mjs';
 const $=id=>document.getElementById(id);
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const domains={courts:'Суды',subscriptions:'Аккаунты',balances:'Балансы',machines:'Машины',hermes:'Hermes'};
@@ -9,6 +10,18 @@ export function displayTitle(title){
  const labels={'Daily safe scratch housekeeping':'Уборка временных файлов','Court — daily arbitration update':'Обновление судебных дел','Plane task follow-through':'Контроль задач','Hermes core update acceptance':'Проверка обновления Hermes'};
  for(const [name,label] of Object.entries(labels))if(title===name||title.startsWith(name+' ·'))return label+title.slice(name.length);
  return title;
+}
+export function issueAction(record){
+ if(record.unconfirmed)return 'Сначала проверить свежие данные о проблеме.';
+ if(record.recommendation)return record.recommendation;
+ if(record.state==='unknown')return 'Проверить доступ к источнику и время последнего замера.';
+ if(record.state!=='open')return null;
+ if(record.reason==='authorization')return 'Войти в аккаунт и обновить доступ к данным.';
+ if(record.reason==='balance'&&Number.isFinite(record.value)&&record.value>=0)return 'Пополнить баланс сервиса.';
+ if(record.reason==='quota'&&Number.isFinite(record.value)&&record.value>=0&&record.value<25)return 'Дождаться сброса квоты или выбрать другой аккаунт.';
+ if(record.id==='court-coverage')return 'Открыть судебную сводку и проверить пробелы охвата.';
+ if(record.domain==='hermes')return 'Открыть результат запуска и выяснить причину ошибки.';
+ return null;
 }
 const seenStorage='cockpit-seen-v1';
 let active=new Map(),registry=new Map(),seen=new Map(),returnTo={hash:'#overview',id:null},pendingFocus=null;
@@ -37,6 +50,7 @@ function row(record,now,{small=false,scope='issue'}={}){
  body.append(el('span',record.badge||(record.unconfirmed?'Не решено · текущий статус неизвестен':record.tone==='critical'?'Важно · не решено':record.tone==='unknown'?'Нет подтверждения':small?'Просмотрено · не решено':'Требует внимания'),'cockpit-tag '+(record.tone||'unknown')));
  body.append(el('h3',displayTitle(record.title)));
  if(!small){body.append(el('p',record.detail));if(record.domain)body.append(el('p',(record.owner||'Ответственный не подтверждён')+' · '+(domains[record.domain]||record.domain),'muted small'));}
+ const action=issueAction(record);if(action&&!small)body.append(el('p','Что сделать: '+action,'small'));
  body.append(openLink(record));article.append(when,body);return article;
 }
 function table(pairs){
@@ -62,12 +76,17 @@ function evidence(now){
  if(displayTitle(r.title)!==r.title)root.append(el('p','Название в источнике: '+r.title,'muted small'));
  if(r.unconfirmed)root.append(el('p','Ранее проблема была подтверждена. Сейчас данных для проверки её состояния нет.','notice'));
  root.append(el('p',r.detail),table([['Ответственный',r.owner||'Не подтверждён'],['Время наблюдения',r.observedAt?dateLabel(r.observedAt):'Неизвестно'],...r.evidence]));
+ const action=issueAction(r);if(action)root.append(el('p','Что сделать: '+action));
  if(r.domain&&domains[r.domain]){const source=el('a','Открыть раздел «'+domains[r.domain]+'»','cockpit-action');source.href='#'+r.domain;root.append(source);}
  root.append(el('p','Просмотр не означает решение. Новая или изменившаяся проблема появляется снова; важная остаётся наверху. История до открытия этой вкладки не восстанавливается.','muted small'));
  if(document.activeElement?.closest('#evidence-content')===null)title.focus({preventScroll:true});
 }
 export function renderCockpit(snapshot,accounts,resources,now,transportError){
  const view=overview(snapshot,accounts,resources,now,transportError);
+ const machines=new Map(resources.machines.map(m=>['machine-'+m.id,m]));
+ for(const r of view.records)if(machines.has(r.id))r.recommendation=machineAction(machines.get(r.id));
+ const integrations=new Map(resources.integrated.map(r=>['integration-'+r.key,r]));
+ for(const r of view.records){const i=integrations.get(r.id);if(r.state==='open'&&i&&!i.current&&i.tone==='warning')r.recommendation='Войти в сервис и обновить доступ к данным.';}
  let cleared=false;
  for(const r of [...view.records,...active.values()])if(r.state==='clear'||view.retired.includes(r.entity))cleared=seen.delete(opaque(r.id))||cleared;
  if(cleared)saveSeen();
