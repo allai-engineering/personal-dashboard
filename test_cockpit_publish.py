@@ -27,6 +27,13 @@ class CockpitPublisherTests(unittest.TestCase):
             after=json.loads((root/'cockpit.json').read_text())
             self.assertEqual(after['court'],before['court']);self.assertEqual(after['events'],before['events'])
             self.assertEqual(after['collected_at'],(now+dt.timedelta(seconds=30)).isoformat())
+    def test_inactive_release_cannot_write_or_read_external_when_due(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            with patch.object(cockpit_publish,'RELEASE_LINK',root/'inactive'):
+                result=cockpit_publish.publish(root,{},court_read=lambda _:self.fail('inactive external read'))
+            self.assertEqual(result['status'],'stale_release')
+            self.assertFalse((root/'cockpit-cadence.json').exists());self.assertFalse((root/'cockpit.json').exists())
     def test_existing_tick_publishes_once_per_fifteen_minutes_and_preserves_source_time(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

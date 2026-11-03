@@ -60,6 +60,7 @@ def publish(directory, config, now=None, court_read=fetch_court):
     fd = os.open(directory / 'cockpit-publish.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
         state_path = directory / 'cockpit-cadence.json'
         state = reader.read(state_path) or {}
         last = state.get('last_attempt')
