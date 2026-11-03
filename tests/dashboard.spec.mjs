@@ -1,5 +1,22 @@
 import {test,expect} from '@playwright/test';
 
+test('Mac batteries show native 80 confirmation and no-connection without false zero',async({page},testInfo)=>{
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ const body=await (await page.request.get('/api/snapshot')).json();const stamp=new Date().toISOString();
+ const source=body.operations.fleet.machines[0];source.kind='physical_mac';
+ source.battery={status:'ok',observed_at:stamp,checked_at:stamp,charge_percent:100,health_percent:89,health_condition:'normal',cycle_count:210,is_charging:false,limit_status:'ok',limit_percent:80,limit_enabled:true};
+ body.operations.fleet.machines.push({...source,id:'missing-mac',state:'not_enrolled',battery:{...source.battery,status:'not_connected',observed_at:null,charge_percent:null,health_percent:null,limit_percent:null,limit_enabled:null,cycle_count:null,is_charging:null,health_condition:'unknown',limit_status:'unavailable'}});
+ body.operations.fleet.inventory_count=2;await page.route('**/api/refresh',r=>r.fulfill({json:body}));
+ await page.locator('#refresh').click();await page.locator('#nav-machines').click();
+ const good=page.locator('#machine-'+source.id),missing=page.locator('#machine-missing-mac');
+ await expect(good).toContainText('Заряд: 100% · Здоровье: 89%');await expect(good).toContainText('Лимит 80% подтверждён');
+ await expect(missing).toContainText('Нет связи с датчиком батареи · 80% не подтверждены');await expect(missing).toContainText('Заряд: неизвестен · Здоровье: неизвестно');
+ await expect(good.locator('summary')).toBeVisible();await good.locator('summary').click();await expect(good).toContainText('Циклы: 210');
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:testInfo.outputPath('mac-batteries.png'),fullPage:true});
+ source.battery.limit_enabled=false;await page.locator('#refresh').click();await expect(good).toContainText('Лимит выключен · 80% не подтверждены');
+ source.battery.observed_at=new Date(Date.now()-1801e3).toISOString();await page.locator('#refresh').click();await expect(good).toContainText('Данные батареи устарели · 80% не подтверждены');await expect(good).toContainText('Заряд: неизвестен');
+});
+
 test('machine aliases appear under one canonical card while unknown machines remain',async({page},testInfo)=>{
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
  const body=await (await page.request.get('/api/snapshot')).json();

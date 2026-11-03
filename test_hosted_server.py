@@ -116,8 +116,10 @@ class HostedServerTests(unittest.TestCase):
         # The deployed web release intentionally contains no collector or SSH reader.
         (Path(self.tmp.name) / 'server.py').write_bytes(Path(server.__file__).read_bytes())
         (Path(self.tmp.name) / 'operations.py').write_bytes(Path(server.__file__).with_name('operations.py').read_bytes())
+        (Path(self.tmp.name) / 'battery_schema.py').write_bytes(Path(server.__file__).with_name('battery_schema.py').read_bytes())
         (Path(self.tmp.name) / 'integrations.py').write_bytes(Path(server.__file__).with_name('integrations.py').read_bytes())
         code = '''import sys, types
+from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 import server
 web = types.SimpleNamespace(serve_forever=lambda: None)
@@ -127,6 +129,8 @@ sys.argv = ['server.py', '--snapshot-file', sys.argv[2]]
 server.main()
 assert web.snapshot_cache.get()['read_only'] is True
 assert 'collector' not in sys.modules
+assert 'mac_battery' not in sys.modules
+assert not Path(server.__file__).with_name('mac_battery.py').exists()
 '''
         result = subprocess.run([sys.executable, '-I', '-c', code, self.tmp.name, str(self.path)],
                                 capture_output=True, text=True, timeout=5)
