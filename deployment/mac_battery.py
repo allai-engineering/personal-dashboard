@@ -84,7 +84,7 @@ def collect(config_path=P('/etc/cpa-dashboard/mac-battery-sources.json'),cache_p
             raw=cache_path.read_bytes()
             if len(raw)>131072:raise ValueError('battery_cache_size')
             cached=json.loads(raw);age=(now-instant(cached['attempted_at'])).total_seconds()
-            if cached.get('source_fingerprint')==fingerprint and set(cached['machines'])==ids and -60<=age<INTERVAL:
+            if cached.get('source_fingerprint')==fingerprint and isinstance(cached.get('machines'),dict) and set(cached['machines'])==ids and -60<=age<INTERVAL:
                 return {k:validate(v) for k,v in cached['machines'].items()}
         except (OSError,ValueError,TypeError,KeyError):pass
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:

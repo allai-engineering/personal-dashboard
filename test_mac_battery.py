@@ -49,6 +49,12 @@ class Tests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as tmp:
    c=pathlib.Path(tmp)/'sources.json';cache=pathlib.Path(tmp)/'cache.json';config=self.config(c);config['sources'][0]['ssh_host']='node-a; set80';c.write_text(json.dumps(config))
    with patch.object(b,'pull') as read:self.assertEqual(b.collect(c,cache,self.now),{});read.assert_not_called()
+ def test_invalid_cache_shape_is_rebuilt(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   c=pathlib.Path(tmp)/'sources.json';cache=pathlib.Path(tmp)/'cache.json';self.config(c)
+   with patch.object(b,'pull',return_value=self.sample()) as read:
+    b.collect(c,cache,self.now);cached=json.loads(cache.read_text());cached['machines']=['node-a','node-b'];cache.write_text(json.dumps(cached))
+    result=b.collect(c,cache,self.now+dt.timedelta(seconds=1));self.assertEqual(read.call_count,4);self.assertEqual(result['node-a']['limit_percent'],80)
  def test_ssh_protocol_identity_size_and_freshness(self):
   source={'id':'node-a','ssh_host':'node-a','hardware_hash':'a'*64}
   valid={'schema':1,'id':'node-a','hardware_hash':'a'*64,'battery':self.sample()}
