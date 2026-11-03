@@ -1,0 +1,27 @@
+import copy,datetime as dt,hashlib,json,pathlib,tempfile,unittest
+import cockpit_read,incident_schema
+from deployment import incident_ops
+
+class InfraProgress(unittest.TestCase):
+ def setUp(self):
+  self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=pathlib.Path(self.tmp.name);self.now=dt.datetime.now(dt.timezone.utc)
+  state=incident_ops.reconcile({},[{'record_id':'machine-node','condition_key':'service:warning','source_state':'open','source_at':self.now.isoformat()}],self.now);r=state['items'][0]
+  args={'record_id':r['record_id'],'fingerprint':r['fingerprint'],'state':'accepted','action':'diagnose','blocker':'none','decision':None,'task_ref':None};incident_ops.report(state,args,'parent',self.now,incident_schema);self.raw=r
+  self.item={k:v for k,v in r.items() if k not in ('execution_id','subject')};self.item.update(execution_key='a'*24,execution_state='running',execution_liveness='verified')
+  key=hashlib.sha256((r['record_id']+'\0'+r['fingerprint']).encode()).hexdigest();self.path=self.root/'profiles/ops/checkpoints/infra-handoffs'/(key+'.json');self.path.parent.mkdir(parents=True)
+  self.phase={'schema':1,'profile':'infra-dev','record_id':r['record_id'],'fingerprint':r['fingerprint'],'parent_execution_id':'parent','native_task_id':'sa-0-abcdef01','state':'waiting','action':'test_fix','blocker':'awaiting_source','decision':None,'task_ref':None,'updated_at':(self.now+dt.timedelta(seconds=1)).isoformat()}
+ def overlay(self):
+  self.path.write_text(json.dumps(self.phase));return cockpit_read.infra_overlay(self.root,self.raw,self.item,incident_schema,(self.now+dt.timedelta(seconds=2)).isoformat())
+ def test_actual_phase_is_visible_and_native_identifiers_stay_private(self):
+  v=self.overlay();self.assertEqual(v['actor'],'infra-dev');self.assertEqual(v['state'],'waiting');self.assertEqual(v['action'],'test_fix');self.assertNotIn('native_task_id',v);self.assertNotIn('parent_execution_id',v)
+ def test_pending_wrong_owner_old_version_and_old_phase_do_not_replace_owner(self):
+  for key,value in [('native_task_id',None),('parent_execution_id','other'),('fingerprint','b'*64),('updated_at',(self.now-dt.timedelta(seconds=1)).isoformat())]:
+   phase=copy.deepcopy(self.phase);self.phase[key]=value;self.assertEqual(self.overlay(),self.item);self.phase=phase
+ def test_false_recovery_private_fields_and_invalid_blockers_do_not_promote_progress(self):
+  for changes in [{'state':'resolved','blocker':'none'},{'state':'needs_user','blocker':'no_safe_procedure','decision':'Investigate'},{'blocker':'secret-string'},{'action':'shell command'}]:
+   phase=copy.deepcopy(self.phase);self.phase.update(changes);self.assertEqual(self.overlay(),self.item);self.phase=phase
+ def test_actor_is_optional_and_cannot_name_an_arbitrary_actor(self):
+  incident_schema.validate({'status':'ok','observed_at':self.now.isoformat(),'items':[self.item]})
+  with self.assertRaisesRegex(ValueError,'incident_actor'):incident_schema.validate({'status':'ok','observed_at':self.now.isoformat(),'items':[{**self.item,'actor':'some-provider'}]})
+
+if __name__=='__main__':unittest.main()

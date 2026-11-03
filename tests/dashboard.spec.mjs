@@ -139,6 +139,7 @@ test('technical incidents belong to Hermes and only explicit owner requests beco
  await expect(page.locator('#cockpit-decisions')).not.toContainText(m.id);await expect(page.locator('#cockpit-work')).toContainText('Передано ops · ждёт разбора');
  item.state='accepted';item.execution_key='b'.repeat(24);item.execution_state='running';item.execution_liveness='verified';item.action='inspect_service';
  await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('В работе · процесс подтверждён');
+ item.actor='infra-dev';await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('Hermes · infra-dev');await expect(page.locator('#cockpit-work')).toContainText('infra-dev · владелец на связи');
  item.execution_state='failed';item.execution_liveness='not_applicable';await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('Запуск остановился без итога по проблеме');
  item.state='waiting';item.blocker='no_safe_procedure';await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('Нужна проверенная процедура исправления');
  await page.locator('#nav-machines').click();await expect(page.locator('#machine-'+m.id)).toContainText('Последний этап: Диагностика служб');await expect(page.locator('#machine-'+m.id)).not.toContainText('Что сделать:');

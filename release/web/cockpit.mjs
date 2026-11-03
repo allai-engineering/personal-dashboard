@@ -97,14 +97,14 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  if(cleared)saveSeen();
  active=reconcile(active,view.records,view.retired);
  registry=new Map(view.records.map(r=>[opaque(r.id),r]));for(const r of active.values())registry.set(opaque(r.id),r);
- for(const r of active.values()){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.owner=r.work.lane==='owner'?'Вы':'Hermes · ops';}
+ for(const r of active.values()){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
  const seenForRows=new Map([...active.values()].map(r=>[r.id,seen.get(opaque(r.id))]));
  const ordered=[...active.values()].sort((a,b)=>Number(b.tone==='critical')-Number(a.tone==='critical')||Number(b.unconfirmed)-Number(a.unconfirmed));
  const decisions=ordered.filter(r=>r.work.lane==='owner');
  const expanded=decisions.filter(r=>!compact(r,seenForRows)),viewed=decisions.filter(r=>compact(r,seenForRows));
  const delegated=ordered.filter(r=>r.work.lane==='hermes');
  const gaps=view.records.filter(r=>r.state==='unknown'&&!active.has(r.id));
- for(const r of gaps){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.owner=r.work.lane==='owner'?'Вы':'Hermes · ops';}
+ for(const r of gaps){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
  for(const r of gaps.filter(r=>r.work.lane==='owner')){decisions.push(r);expanded.push(r);}
  delegated.push(...gaps.filter(r=>r.work.item&&r.work.lane==='hermes'));
  $('cockpit-coverage').replaceChildren(el('strong',`${decisions.length} решений для вас · ${delegated.length} проблем у Hermes · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));

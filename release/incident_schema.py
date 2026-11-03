@@ -24,7 +24,8 @@ def validate(value):
  if not isinstance(value['items'],list) or len(value['items'])>200:raise ValueError('incident_count')
  seen=set()
  for w in value['items']:
-  if not isinstance(w,dict) or set(w)!=FIELDS:raise ValueError('incident_fields')
+  if not isinstance(w,dict) or set(w) not in (FIELDS,FIELDS|{'actor'}):raise ValueError('incident_fields')
+  if 'actor' in w and w['actor'] not in ('ops','infra-dev'):raise ValueError('incident_actor')
   text(w['record_id'],240);text(w['condition_key'],500)
   if w['record_id'] in seen or not re.fullmatch('[a-f0-9]{64}',w['fingerprint']):raise ValueError('incident_identity')
   seen.add(w['record_id'])
