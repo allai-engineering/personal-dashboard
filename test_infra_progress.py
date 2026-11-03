@@ -9,7 +9,7 @@ class InfraProgress(unittest.TestCase):
   args={'record_id':r['record_id'],'fingerprint':r['fingerprint'],'state':'accepted','action':'diagnose','blocker':'none','decision':None,'task_ref':None};incident_ops.report(state,args,'parent',self.now,incident_schema);self.raw=r
   self.item={k:v for k,v in r.items() if k not in ('execution_id','subject')};self.item.update(execution_key='a'*24,execution_state='running',execution_liveness='verified')
   key=hashlib.sha256((r['record_id']+'\0'+r['fingerprint']).encode()).hexdigest();self.path=self.root/'profiles/ops/checkpoints/infra-handoffs'/(key+'.json');self.path.parent.mkdir(parents=True)
-  self.phase={'schema':1,'profile':'infra-dev','record_id':r['record_id'],'fingerprint':r['fingerprint'],'parent_execution_id':'parent','native_task_id':'sa-0-abcdef01','state':'waiting','action':'test_fix','blocker':'awaiting_source','decision':None,'task_ref':None,'updated_at':(self.now+dt.timedelta(seconds=1)).isoformat()}
+  self.phase={'schema':1,'profile':'infra-dev','record_id':r['record_id'],'fingerprint':r['fingerprint'],'parent_execution_id':'parent','owner_snapshot':{k:r.get(k) for k in ('execution_id','state','action','blocker','decision','task_ref','updated_at','fingerprint')},'native_task_id':'sa-0-abcdef01','state':'waiting','action':'test_fix','blocker':'awaiting_source','decision':None,'task_ref':None,'updated_at':(self.now+dt.timedelta(seconds=1)).isoformat()}
  def overlay(self):
   self.path.write_text(json.dumps(self.phase));return cockpit_read.infra_overlay(self.root,self.raw,self.item,incident_schema,(self.now+dt.timedelta(seconds=2)).isoformat())
  def test_actual_phase_is_visible_and_native_identifiers_stay_private(self):
@@ -23,5 +23,13 @@ class InfraProgress(unittest.TestCase):
  def test_actor_is_optional_and_cannot_name_an_arbitrary_actor(self):
   incident_schema.validate({'status':'ok','observed_at':self.now.isoformat(),'items':[self.item]})
   with self.assertRaisesRegex(ValueError,'incident_actor'):incident_schema.validate({'status':'ok','observed_at':self.now.isoformat(),'items':[{**self.item,'actor':'some-provider'}]})
+ def test_later_owner_result_wins_over_a_later_child_timestamp(self):
+  self.raw.update(state='waiting',blocker='no_safe_procedure');self.assertEqual(self.overlay(),self.item)
+ def test_missing_or_malformed_infra_jobs_remain_unknown(self):
+  def profile():return next(x for x in cockpit_read.hermes(self.root)['profiles'] if x['id']=='infra-dev')
+  self.assertEqual(profile()['status'],'unavailable');self.assertIsNone(profile()['stored_jobs'])
+  jobs=self.root/'profiles/infra-dev/cron/jobs.json';jobs.parent.mkdir(parents=True);jobs.write_text('{"jobs": []}')
+  self.assertEqual(profile()['status'],'empty');self.assertEqual(profile()['stored_jobs'],0)
+  jobs.write_text('{"jobs": "invalid"}');self.assertEqual(profile()['status'],'unavailable');self.assertIsNone(profile()['stored_jobs'])
 
 if __name__=='__main__':unittest.main()

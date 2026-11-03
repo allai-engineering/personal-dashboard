@@ -111,6 +111,8 @@ def infra_overlay(root,raw,item,contract,now):
     try:
         if phase.get('schema')!=1 or phase.get('profile')!='infra-dev' or phase.get('record_id')!=raw['record_id'] or phase.get('fingerprint')!=raw['fingerprint'] or phase.get('parent_execution_id')!=raw.get('execution_id'):return item
         if not isinstance(phase.get('native_task_id'),str) or not re.fullmatch(r'sa-\d+-[a-f0-9]{8}',phase['native_task_id']):return item
+        fields=('execution_id','state','action','blocker','decision','task_ref','updated_at','fingerprint')
+        if phase.get('owner_snapshot')!={k:raw.get(k) for k in fields}:return item
         if contract.stamp(phase['updated_at'])<contract.stamp(raw['updated_at']):return item
         candidate={**item,**{k:phase[k] for k in ('state','action','blocker','decision','task_ref','updated_at')},'actor':'infra-dev'}
         contract.validate({'status':'ok','observed_at':now,'items':[candidate]})
@@ -148,11 +150,13 @@ def hermes(root):
     tasks, profiles = [], []
     for profile in PROFILES:
         home = root if profile == 'default' else root / 'profiles' / profile
-        job_data = read(home / 'cron/jobs.json') or {}
+        job_data = read(home / 'cron/jobs.json')
+        jobs_valid = isinstance(job_data,dict) and isinstance(job_data.get('jobs'),list)
+        job_data = job_data if isinstance(job_data,dict) else {}
         jobs = job_data.get('jobs', []) if isinstance(job_data, dict) else []
         jobs = jobs if isinstance(jobs, list) else []
         jobs = {j['id']: j for j in jobs if isinstance(j, dict) and isinstance(j.get('id'), str)}
-        rows, status = [], 'empty' if profile=='infra-dev' and isinstance(job_data,dict) and not jobs else 'unavailable'
+        rows, status = [], 'empty' if profile=='infra-dev' and jobs_valid and not jobs else 'unavailable'
         path = home / 'cron/executions.db'
         if path.is_file() and not path.is_symlink():
             try:
@@ -170,7 +174,7 @@ def hermes(root):
                 seen.add(key); chosen.append(row)
         if len(chosen) > 12 or len(jobs) > 12:
             status = 'partial'
-        profiles.append({'id': profile, 'status': status, 'stored_jobs': len(jobs) if job_data else None})
+        profiles.append({'id': profile, 'status': status, 'stored_jobs': len(jobs) if jobs_valid else None})
         for row in chosen[:12]:
             job = jobs.get(row['job_id'], {})
             label = ' '.join(str(job.get('name') or 'Задание Hermes').split())[:150]
