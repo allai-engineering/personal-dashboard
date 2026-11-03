@@ -23,27 +23,29 @@ function render(){
  else if(snapshot&&snapshot.inventory?.complete!==true)messages.push('Реестр получен не полностью.');
  if(snapshot&&snapshot.status!=='ok')messages.push('Некоторые источники данных недоступны.');
  for(const [name,s] of Object.entries(snapshot?.services||{}))if(s.status!=='ok'||s.active_state!=='active')messages.push(`${name}: ${s.active_state||'состояние неизвестно'}`);
- $('notice').hidden=!messages.length;$('notice').textContent=messages.join(' ');
- $('observation').textContent=snapshot?`Снимок ${relativeTime(snapshot.observed_at_utc,now)}`:transportError?'Снимок недоступен':'Получаем данные…';
- $('observation').title=snapshot?dateLabel(snapshot.observed_at_utc)+' (UTC+3)':'';
+ $('notice').hidden=!messages.length;$('notice-text').textContent=messages.join(' ');
  const complete=snapshot?.inventory?.status==='ok'&&snapshot.inventory.complete===true;
  const affected=all.filter(x=>!x.view.authorizationIssue&&x.view.problems.length).length, failed=all.filter(x=>x.view.failures?.failed>0).length,authCount=all.filter(x=>x.view.authorizationIssue).length;
  $('account-count').textContent=(complete?`${all.length} аккаунтов`:'Полнота списка неизвестна')+(fresh&&affected?` · С ограничениями: ${affected}`:'')+(fresh&&failed?` · С ошибками попыток: ${failed}`:'')+(authCount?` · С проблемами авторизации: ${authCount}`:'');
  const open=new Set([...document.querySelectorAll('.account details[open]')].map(n=>n.dataset.id));
- const cards=$('accounts'),authCards=$('authorization-accounts');cards.replaceChildren();authCards.replaceChildren();
+ const cards=$('accounts'),authCards=$('authorization-accounts'),unknownCards=$('unknown-quota-accounts');cards.replaceChildren();authCards.replaceChildren();unknownCards.replaceChildren();
+ const unknown=selected.filter(x=>!x.view.authorizationIssue&&!x.view.windows.some(w=>w.state==='observed'));
+ $('unknown-quota-section').hidden=!unknown.length;
+ $('unknown-quota-count').textContent=`Без свежих квот · ${unknown.length}`;
+ if($('search').value)$('unknown-quota-section').open=true;
  $('authorization-section').hidden=!selected.some(x=>x.view.authorizationIssue);
  if(!selected.length)cards.append(el('p',emptyMessage(snapshot,Boolean($('search').value)),'empty'));
  for(const {account:a,view:v} of selected){
   const card=el('article',null,'account'),head=el('div',null,'account-head'),identity=el('div');
   const details=el('details');details.dataset.id=a.id;details.open=open.has(a.id);details.append(el('summary','Подробнее'));
   card.dataset.accountId=a.id;card.setAttribute('aria-label',a.login||a.label);
-  identity.append(el('h2',a.login||a.label));
+  const login=el('h2',a.login||a.label);login.title=a.login||a.label;identity.append(login);
   details.append(el('p',a.source_titles.join(' · '),'muted small'));
   if(a.provider==='openai'||a.provider==='codex')details.append(el('p','ChatGPT + Codex · ниже квота Codex','muted small'));
   if(a.inventory_present===false)details.append(el('p','Без привязки к реестру','muted'));
   const plan=a.subscription?.plan;
   const provider=a.provider==='claude'?'Claude':'OpenAI';
-  head.append(identity,el('span',provider+' · '+(plan?plan[0].toUpperCase()+plan.slice(1):'тариф неизвестен'),plan?'plan':'plan unknown'));card.append(head);
+  identity.append(el('span',provider+' · '+(plan?plan[0].toUpperCase()+plan.slice(1):'тариф неизвестен'),plan?'plan':'plan unknown'));head.append(identity);card.append(head);
   const quotas=el('div',null,'quotas');card.append(quotas);
   for(const w of v.windows.length?v.windows:[{state:'unknown'}]){
    const tone=quotaTone(w),block=el('div',null,'quota'+(tone?' quota-'+tone:''));
@@ -73,7 +75,7 @@ function render(){
    if(v.problems[0]?.until)details.append(timestamp(`До ${dateLabel(v.problems[0].until)}`,v.problems[0].until,'warning small'));
   }
   if(v.failures?.failed>0)details.append(el('p',`Ошибки попыток: ${number(v.failures.failed)} из ${number(v.failures.total)} за 15 мин`,'attempt-errors'));
-  const dl=el('dl');detailRow(dl,'Идентификатор',a.label);detailRow(dl,'Источник тарифа',plan?(a.hostkey?'Запись авторизации CPA':'Данные подключения / сервиса'):'Нет данных');
+  const dl=el('dl');if(a.login)detailRow(dl,'Логин',a.login);detailRow(dl,'Идентификатор',a.label);detailRow(dl,'Источник тарифа',plan?(a.hostkey?'Запись авторизации CPA':'Данные подключения / сервиса'):'Нет данных');
   if(a.source_id)detailRow(dl,'Последняя проверка источника',dateLabel(a.source_observed_at));
   for(const c of a.connections||[])if(c.problem)detailRow(dl,c.title,c.problem);
   if(a.provider==='openai'||a.provider==='codex')detailRow(dl,'Лимиты чатов ChatGPT','Отдельно не измерены');
@@ -81,8 +83,9 @@ function render(){
   const c=a.hostkey?snapshot?.runtime?.concurrency:null;detailRow(dl,'Concurrency / warm',a.inventory_present!==false&&numeric(c?.max_concurrency)?number(c.max_concurrency)+' / '+number(c.warm_reserved_slots):'Неизвестно');details.append(dl);
   for(const p of v.problems)details.append(el('p',p.text+(p.model?' · '+p.model:'')+(p.until?' · до '+dateLabel(p.until):''),'warning small'));
   for(const [key,label] of [['15','15 минут'],['60','Час'],['1440','Сутки']]){const m=a.windows?.[key];details.append(el('p',m?`${label}: ${number(m.failed)} ошибок / ${number(m.attempt_records)} записей попыток${v.fresh?'':' · старый снимок'}`:`${label}: статистика неизвестна`,'small'));if(m&&Object.keys(m.status_codes||{}).length)details.append(el('p','Коды: '+Object.entries(m.status_codes).map(([code,n])=>`${code} × ${number(n)}`).join(', '),'muted small'));}
-  details.append(el('p','Ошибка попытки не равна сбою запроса: повтор мог завершиться успешно. Коды Keeper не различают upstream и локальный отказ. Отсутствие ограничений CPA не гарантирует успешную генерацию.','muted small'));card.append(details);(v.authorizationIssue?authCards:cards).append(card);
+  details.append(el('p','Ошибка попытки не равна сбою запроса: повтор мог завершиться успешно. Коды Keeper не различают upstream и локальный отказ. Отсутствие ограничений CPA не гарантирует успешную генерацию.','muted small'));card.append(details);(v.authorizationIssue?authCards:!v.windows.some(w=>w.state==='observed')?unknownCards:cards).append(card);
  }
+ if(selected.length&&!cards.childElementCount)cards.append(el('p',unknown.length?'Свежие квоты пока недоступны. Аккаунты сохранены ниже.':'Аккаунты с проблемами доступа показаны отдельно.','empty'));
  const resources=renderOperations(effective,transportError,now);
  renderCockpit(effective,all,resources,now,transportError);
  const cap=fresh?capacityView(snapshot?.runtime):null;
