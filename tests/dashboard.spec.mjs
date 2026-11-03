@@ -157,6 +157,11 @@ test('preparation remains visible after the source becomes healthy',async({page}
  await page.locator('#nav-machines').click();await expect(page.locator('#machine-'+m.id)).toContainText('17 Linux-проверок пройдено · план условный');
  await page.screenshot({path:testInfo.outputPath('preparation-result.png'),fullPage:true});
  body.cockpit.work.items[0].preparation.current_occurrence=false;await page.locator('#refresh').click();await expect(page.locator('#machine-'+m.id)).toContainText('План прошлого запуска');
+ m.observed_at=new Date(Date.now()-864e5).toISOString();
+ await page.locator('#refresh').click();await expect(page.locator('#machine-'+m.id)).toContainText('План прошлого запуска');
+ await expect(page.locator('#machine-'+m.id)).toContainText('Передача ещё не подтверждена');
+ await expect(page.locator('#machine-'+m.id)).not.toContainText('владелец на связи');
+ await page.screenshot({path:testInfo.outputPath('preparation-source-gap.png'),fullPage:true});
 });
 
 test('technical incidents belong to Hermes and only explicit owner requests become decisions',async({page},testInfo)=>{
