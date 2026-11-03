@@ -85,6 +85,8 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  const view=overview(snapshot,accounts,resources,now,transportError);
  const machines=new Map(resources.machines.map(m=>['machine-'+m.id,m]));
  for(const r of view.records)if(machines.has(r.id))r.recommendation=machineAction(machines.get(r.id));
+ const integrations=new Map(resources.integrated.map(r=>['integration-'+r.key,r]));
+ for(const r of view.records){const i=integrations.get(r.id);if(r.state==='open'&&i&&!i.current&&i.tone==='warning')r.recommendation='Войти в сервис и обновить доступ к данным.';}
  let cleared=false;
  for(const r of [...view.records,...active.values()])if(r.state==='clear'||view.retired.includes(r.entity))cleared=seen.delete(opaque(r.id))||cleared;
  if(cleared)saveSeen();
