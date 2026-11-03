@@ -1,0 +1,1 @@
+hermes ALL=(hermes:cpa-dashboard) NOPASSWD: /usr/local/bin/dashboard-incident scan, /usr/local/bin/dashboard-incident status, /usr/local/bin/dashboard-incident report

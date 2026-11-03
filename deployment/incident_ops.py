@@ -2,7 +2,7 @@
 """Existing ops checkpoint/report bridge; fixed cached sources and native execution evidence."""
 import datetime as dt,fcntl,hashlib,importlib.util,json,os,pathlib,sqlite3,subprocess,sys,tempfile
 P=pathlib.Path
-RELEASE=P('/opt/cpa-dashboard/current');HOME=P('/var/lib/hermes/.hermes');CHECKPOINT=HOME/'profiles/ops/checkpoints/dashboard-incidents.json'
+RELEASE=P('/opt/cpa-dashboard/current');HERMES_ROOT=P('/var/lib/hermes/.hermes');CHECKPOINT=HERMES_ROOT/'profiles/ops/checkpoints/dashboard-incidents.json'
 
 def module(name,path):
  s=importlib.util.spec_from_file_location(name,path);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
@@ -81,17 +81,21 @@ def main():
    run=subprocess.run(['/usr/local/bin/node',str(RELEASE/'incident_intake.mjs')],input=body,capture_output=True,timeout=12)
    if run.returncode or len(run.stdout)>524288:raise ValueError('intake_failed')
    value=reconcile(previous,json.loads(run.stdout),now);atomic(CHECKPOINT,value)
-   print(json.dumps({'intake':sorted([w['record_id'],w['fingerprint']] for w in value['items'] if w['source_state']!='clear')}));return
-  if sys.argv[1]=='status':
+   result={'intake':sorted([w['record_id'],w['fingerprint']] for w in value['items'] if w['source_state']!='clear')}
+  elif sys.argv[1]=='status':
    print(json.dumps(previous));return
-  raw=sys.stdin.buffer.read(8193)
-  if len(raw)>8192:raise ValueError('report_size')
-  execution=live_execution(HOME/'profiles/ops/cron/executions.db')
-  value=report(previous,json.loads(raw),execution,now,schema);atomic(CHECKPOINT,value)
- # Refresh only local execution/checkpoint evidence after a report; external cadence is untouched.
+  else:
+   raw=sys.stdin.buffer.read(8193)
+   if len(raw)>8192:raise ValueError('report_size')
+   execution=live_execution(HERMES_ROOT/'profiles/ops/cron/executions.db')
+   value=report(previous,json.loads(raw),execution,now,schema);atomic(CHECKPOINT,value)
+   result={'recorded':True,'execution_key':hashlib.sha256(('ops:'+execution).encode()).hexdigest()[:24]}
+ # Refresh only local execution/checkpoint evidence; the external source gate is unchanged.
  publisher=module('incident_publisher',RELEASE/'cockpit_publish.py')
- publisher.refresh_local(P('/var/lib/cpa-dashboard/cockpit'),HOME)
- print(json.dumps({'recorded':True,'execution_key':hashlib.sha256(('ops:'+execution).encode()).hexdigest()[:24]}))
+ published=publisher.refresh_local(P('/var/lib/cpa-dashboard/cockpit'),HERMES_ROOT)
+ if published['status']!='local_published':raise ValueError('local_publication_failed')
+ print(json.dumps(result))
+
 if __name__=='__main__':
  try:main()
  except Exception as e:
