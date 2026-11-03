@@ -1,5 +1,4 @@
 import {integrationRows} from './integrations-view.mjs';
-const operationIcons={"27": "/assets/cutout-27-c9bc9c75f9dd.png", "1": "/assets/cutout-1-cafa1f33bb15.png", "21": "/assets/cutout-21-ec68832ade0e.png", "42": "/assets/cutout-42-f0cbed3e8905.png", "51": "/assets/cutout-51-786235fc9dca.png", "34": "/assets/cutout-34-ab09e3bda00e.png", "16": "/assets/cutout-16-c315cbc1b9b9.png"};
 import {sortedBalances,sortedMachines,freshAt} from './operations-view.mjs';
 import {relativeTime,dateLabel} from './account-view.mjs';
 const $=id=>document.getElementById(id), el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
@@ -19,18 +18,18 @@ export function initNavigation(){
  }
  addEventListener('hashchange',show);show();
 }
-function observation(snapshot,transportError,now){
- const value=location.hash==='#subscriptions'?snapshot?.observed_at_utc:snapshot?.operations?.collected_at;
- $('observation').textContent=transportError?'Не удалось обновить данные':value?`Получено ${relativeTime(value,now)} · давность замеров указана отдельно`:'Получаем данные…';
- $('observation').title=value?dateLabel(value):'';
+export function observationView(snapshot,transportError,now,hash){
+ const page=hash.slice(1).split('/')[0];
+ const value=page==='subscriptions'?snapshot?.observed_at_utc:['balances','machines'].includes(page)?snapshot?.operations?.collected_at:snapshot?.cockpit?.collected_at;
+ return {text:transportError?'Не удалось обновить данные':value?`Снимок ${relativeTime(value,now)}`:snapshot?'Время обновления неизвестно':'Получаем данные…',title:value?dateLabel(value):''};
 }
-function icon(id){const img=document.createElement('img');img.src=operationIcons[id];img.alt='';img.className='operation-icon';img.width=28;img.height=28;return img;}
+function observation(snapshot,transportError,now){const view=observationView(snapshot,transportError,now,location.hash);$('observation').textContent=view.text;$('observation').title=view.title;}
 function badge(tone){return el('span',{critical:'Важно',warning:'Внимание',unknown:'Нет данных',ok:'Замер получен'}[tone],'badge '+tone);}
 function detail(root,label,value){const p=el('p',null,'small');p.append(el('span',label+': ','muted'),document.createTextNode(value));root.append(p);}
 function disclosure(card,key,open){const d=el('details');d.dataset.operation=key;d.open=open.has(key);d.append(el('summary','Подробнее'));card.append(d);return d;}
 function balanceCard(b,now,open){
  const card=el('article',null,'account resource-card '+b.tone);card.id='balance-'+b.id;
- const head=el('div',null,'service-top');head.append(icon(b.id==='openrouter'?34:b.id==='digitalocean'?42:27),el('h2',b.title),badge(b.tone));card.append(head);
+ const head=el('div',null,'service-top');head.append(el('h2',b.title),badge(b.tone));card.append(head);
  const label=b.amount===null?'Остаток неизвестен':b.billed?'Начислено за период':b.noPrepayment?'Предоплаты нет':b.id==='digitalocean'?'Предоплата после начислений':'Осталось';
  card.append(el('p',label,'muted small'));
  card.append(el('p',b.amount===null?'Нет данных':b.noPrepayment&&!b.billed?'—':amount(b.amount,b.unit),'balance-value'+(b.amount===null?' unknown':'')));
@@ -46,7 +45,7 @@ function balanceCard(b,now,open){
 }
 function machineCard(m,now,open){
  const card=el('article',null,'account resource-card '+m.tone);card.id='machine-'+m.id;
- const head=el('div',null,'service-top');head.append(icon(51),el('h2',m.id==='applications'?'Приложения и бэкапы':m.id),badge(m.tone));card.append(head);
+ const head=el('div',null,'service-top');head.append(el('h2',m.id==='applications'?'Приложения и бэкапы':m.id),badge(m.tone));card.append(head);
  card.append(el('p',m.message,'resource-message'));
  const when=m.active.find(i=>i.severity!=='unknown')?.observed_at||m.observed_at;
  card.append(el('p',`Замер ${relativeTime(when,now)}`,'muted small'));
@@ -80,8 +79,10 @@ export function renderOperations(snapshot,transportError,now){
  const machineRoot=$('machines');machineRoot.replaceChildren(...machines.map(m=>machineCard(m,now,open)));
  const okay=!transportError&&freshAt(ops?.collected_at,now,1800);
  $('operations-notice').hidden=okay;$('operations-notice').textContent='Нет свежего снимка машин и балансов. Числа не считаются текущими.';
- if(!balances.length)balancesRoot.append(el('p','Данные балансов пока недоступны.','empty'));
- if(!machines.length)machineRoot.append(el('p','Реестр Hermes недоступен. Это не означает отсутствие машин.','empty'));
+ $('source-status').textContent=okay?'Источники и обновление':'Есть пробелы в данных · Подробнее';
+ for(const [root,missing,text] of [[balancesRoot,!balances.length,'Данные балансов пока недоступны.'],[machineRoot,!machines.length,'Реестр Hermes недоступен. Это не означает отсутствие машин.']])if(missing){
+  const state=el('div',null,'empty-state');state.append(el('h2',text),el('p',ops?.collected_at?'Снимок источника: '+dateLabel(ops.collected_at):'Время снимка источника неизвестно.','muted small'),el('p','Сбор данных работает по расписанию. Кнопка «Обновить» перечитывает сохранённый снимок.','muted small'));root.append(state);
+ }
  const count=ops?.fleet?.inventory_count,enrolled=ops?.fleet?.enrolled;
  $('machine-count').textContent=typeof count==='number'?`${count} записей в реестре · диагностика подключена: ${enrolled} · без свежего состояния: ${machines.filter(m=>m.tone==='unknown').length}`:'Охват машин неизвестен';
  const integrated=integrationRows(snapshot?.integrations,now,transportError);

@@ -5,6 +5,11 @@ const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.te
 const domains={courts:'Суды',subscriptions:'Аккаунты',balances:'Балансы',machines:'Машины',hermes:'Hermes'};
 const words={ok:'проверено',partial:'частично',error:'ошибка',unavailable:'недоступно',complete:'полный',incomplete:'неполный',unknown:'неизвестно',courts:'суды',kad_metadata:'метаданные КАД',kad:'КАД',scheduled:'плановый',manual:'ручной',completed:'процесс завершён',failed:'ошибка процесса',running:'идёт по журналу',claimed:'принят по журналу',planned:'запланирован',paused:'приостановлен'};
 const word=value=>words[value]||value;
+export function displayTitle(title){
+ const labels={'Daily safe scratch housekeeping':'Уборка временных файлов','Court — daily arbitration update':'Обновление судебных дел','Plane task follow-through':'Контроль задач','Hermes core update acceptance':'Проверка обновления Hermes'};
+ for(const [name,label] of Object.entries(labels))if(title===name||title.startsWith(name+' ·'))return label+title.slice(name.length);
+ return title;
+}
 const seenStorage='cockpit-seen-v1';
 let active=new Map(),registry=new Map(),seen=new Map(),returnTo={hash:'#overview',id:null},pendingFocus=null;
 try{
@@ -30,7 +35,7 @@ function row(record,now,{small=false,scope='issue'}={}){
  const when=el('div',record.when|| (record.observedAt?relativeTime(record.observedAt,now):'Нет замера'),'cockpit-when');
  const body=el('div',null,'cockpit-body');
  body.append(el('span',record.badge||(record.unconfirmed?'Не решено · текущий статус неизвестен':record.tone==='critical'?'Важно · не решено':record.tone==='unknown'?'Нет подтверждения':small?'Просмотрено · не решено':'Требует внимания'),'cockpit-tag '+(record.tone||'unknown')));
- body.append(el('h3',record.title));
+ body.append(el('h3',displayTitle(record.title)));
  if(!small){body.append(el('p',record.detail));if(record.domain)body.append(el('p',(record.owner||'Ответственный не подтверждён')+' · '+(domains[record.domain]||record.domain),'muted small'));}
  body.append(openLink(record));article.append(when,body);return article;
 }
@@ -53,7 +58,8 @@ function evidence(now){
  root.replaceChildren(back);
  if(!r){root.append(el('h2','Запись сейчас недоступна'),el('p','Вернитесь к списку: источник мог измениться или запись отсутствует в этой копии.'));return;}
  if(r.revision)markSeen(r);
- const title=el('h2',r.title);title.tabIndex=-1;root.append(title);
+ const title=el('h2',displayTitle(r.title));title.tabIndex=-1;root.append(title);
+ if(displayTitle(r.title)!==r.title)root.append(el('p','Название в источнике: '+r.title,'muted small'));
  if(r.unconfirmed)root.append(el('p','Ранее проблема была подтверждена. Сейчас данных для проверки её состояния нет.','notice'));
  root.append(el('p',r.detail),table([['Ответственный',r.owner||'Не подтверждён'],['Время наблюдения',r.observedAt?dateLabel(r.observedAt):'Неизвестно'],...r.evidence]));
  if(r.domain&&domains[r.domain]){const source=el('a','Открыть раздел «'+domains[r.domain]+'»','cockpit-action');source.href='#'+r.domain;root.append(source);}
