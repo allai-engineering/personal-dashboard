@@ -1,4 +1,4 @@
-import {overview,reconcile,compact,opaque,incidentView,maintenanceWork} from './cockpit-view.mjs';
+import {overview,reconcile,compact,opaque,incidentView,maintenanceWork,preparationLabel} from './cockpit-view.mjs';
 import {dateLabel,relativeTime} from './account-view.mjs';
 import {machineAction} from './operations.mjs';
 const $=id=>document.getElementById(id);
@@ -54,6 +54,7 @@ function row(record,now,{small=false,scope='issue'}={}){
  if(record.work?.action&&!small)body.append(el('p','Последний этап: '+record.work.action,'small'));
  if(record.work?.item&&!small)body.append(el('p','Отметка Hermes: '+relativeTime(record.work.item.updated_at,now),'muted small'));
  if(record.work?.blocker&&!small)body.append(el('p',record.work.blocker,'small'));
+ if(!small&&preparationLabel(record.work?.item))body.append(el('p',preparationLabel(record.work.item)+' · '+relativeTime(record.work.item.preparation.tested_at,now),'small'));
  const action=issueAction(record);if(action&&!small)body.append(el('p','Что сделать: '+action,'small'));
  body.append(openLink(record));article.append(when,body);return article;
 }
@@ -81,6 +82,7 @@ function evidence(now){
  if(r.unconfirmed)root.append(el('p','Ранее проблема была подтверждена. Сейчас данных для проверки её состояния нет.','notice'));
  root.append(el('p',r.detail),table([['Ответственный',r.owner||'Не подтверждён'],['Время наблюдения',r.observedAt?dateLabel(r.observedAt):'Неизвестно'],...r.evidence]));
  if(r.work){root.append(table([['Передача',r.work.label],['Последний этап',r.work.action],['Остановка',r.work.blocker],['Отметка Hermes',r.work.item?dateLabel(r.work.item.updated_at):null],['Запуск на замере',r.work.item?.execution_state],['Статус прочитан',r.work.observedAt?dateLabel(r.work.observedAt):null],['Задача',r.work.item?.task_ref]]));}
+ if(preparationLabel(r.work?.item))root.append(table([['Проверка плана',preparationLabel(r.work.item)],['Проверено',dateLabel(r.work.item.preparation.tested_at)],['Ограничение','Проверка плана не подтверждает очистку или восстановление машины.']]));
  const action=issueAction(r);if(action)root.append(el('p','Что сделать: '+action));
  if(r.domain&&domains[r.domain]){const source=el('a','Открыть раздел «'+domains[r.domain]+'»','cockpit-action');source.href='#'+r.domain;root.append(source);}
  root.append(el('p','Просмотр не означает решение. Новая или изменившаяся проблема появляется снова; важная остаётся наверху. История до открытия этой вкладки не восстанавливается.','muted small'));

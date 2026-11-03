@@ -14,6 +14,24 @@ class InfraProgress(unittest.TestCase):
   self.path.write_text(json.dumps(self.phase));return cockpit_read.infra_overlay(self.root,self.raw,self.item,incident_schema,(self.now+dt.timedelta(seconds=2)).isoformat())
  def test_actual_phase_is_visible_and_native_identifiers_stay_private(self):
   v=self.overlay();self.assertEqual(v['actor'],'infra-dev');self.assertEqual(v['state'],'waiting');self.assertEqual(v['action'],'test_fix');self.assertNotIn('native_task_id',v);self.assertNotIn('parent_execution_id',v)
+ def test_preparation_is_historical_evidence_and_never_changes_incident_state(self):
+  report={'schema':1,'items':[{'record_id':self.raw['record_id'],'fingerprint':self.raw['fingerprint'],'status':'passed_conditional','tested_at':self.now.isoformat(),'checks':17,'private_prompt':'fixture-private-text'}]}
+  target=self.path.parent.parent/'infra-results.json';target.write_text(json.dumps(report))
+  value=cockpit_read.preparation_overlay(cockpit_read.read(target),self.item,incident_schema,self.now.isoformat())
+  self.assertEqual(value['preparation'],{'status':'passed_conditional','tested_at':self.now.isoformat(),'checks':17,'current_occurrence':True})
+  self.assertEqual(value['state'],self.item['state']);self.assertEqual(value['blocker'],self.item['blocker'])
+  self.assertNotIn('fixture-private-text',json.dumps(value))
+  report['items'][0]['fingerprint']='b'*64;target.write_text(json.dumps(report))
+  value=cockpit_read.preparation_overlay(cockpit_read.read(target),self.item,incident_schema,self.now.isoformat())
+  self.assertFalse(value['preparation']['current_occurrence'])
+ def test_unverified_or_malformed_preparation_does_not_hide_current_progress(self):
+  target=self.path.parent.parent/'infra-results.json'
+  report={'record_id':self.raw['record_id'],'fingerprint':self.raw['fingerprint'],'status':'passed_conditional','tested_at':self.now.isoformat(),'checks':17}
+  for changes in ({'status':'production_ready'},{'checks':True},{'checks':0},{'tested_at':(self.now+dt.timedelta(hours=1)).isoformat()}):
+   target.write_text(json.dumps({'schema':1,'items':[{**report,**changes}]}))
+   self.assertEqual(cockpit_read.preparation_overlay(cockpit_read.read(target),self.item,incident_schema,self.now.isoformat()),self.item)
+  target.write_text(json.dumps({'schema':1,'items':[report,report]}))
+  self.assertEqual(cockpit_read.preparation_overlay(cockpit_read.read(target),self.item,incident_schema,self.now.isoformat()),self.item)
  def test_pending_wrong_owner_old_version_and_old_phase_do_not_replace_owner(self):
   for key,value in [('native_task_id',None),('parent_execution_id','other'),('fingerprint','b'*64),('updated_at',(self.now-dt.timedelta(seconds=1)).isoformat())]:
    phase=copy.deepcopy(self.phase);self.phase[key]=value;self.assertEqual(self.overlay(),self.item);self.phase=phase

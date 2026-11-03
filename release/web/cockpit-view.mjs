@@ -85,6 +85,10 @@ export function overview(snapshot,accounts,resources,now=Date.now(),transportErr
 
 export const workActions={diagnose:'Разбор причины',check_access:'Проверка существующего доступа',inspect_disk:'Анализ занятого места',inspect_service:'Диагностика служб',inspect_backup:'Проверка резервных копий',prepare_fix:'Подготовка исправления',test_fix:'Проверка исправления',verify_recovery:'Проверка восстановления',wait_supervisor:'Проверка штатного восстановления',wait_reset:'Ожидание сброса квоты',check_balance:'Проверка баланса',check_job:'Разбор неудачного запуска',check_source:'Проверка источника данных'};
 export const workBlockers={none:null,no_access:'Нет подтверждённого доступа',no_safe_procedure:'Нужна проверенная процедура исправления',active_work:'На машине идёт работа',awaiting_source:'Нет свежих данных источника',upstream:'Внешний сервис недоступен',execution_failed:'Запуск завершился с ошибкой',login_required:'Нужен вход владельца',payment_required:'Нужна оплата',owner_approval:'Нужно решение владельца'};
+export function preparationLabel(item){
+ const p=item?.preparation;if(!p)return null;
+ return (p.current_occurrence?'Последний план':'План прошлого запуска')+': '+(p.status==='passed_conditional'?`${p.checks} Linux-проверок пройдено · план условный`:'проверки не пройдены');
+}
 export function incidentView(record,work,now=Date.now(),transportError=false){
  const key=record.condition_key||JSON.stringify([record.state,record.reason,record.value]);
  const item=work?.status==='ok'?work.items.find(w=>w.record_id===record.id&&w.condition_key===key&&(w.source_state===record.state||record.unconfirmed&&w.source_state==='unknown')):null;

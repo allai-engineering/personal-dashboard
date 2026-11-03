@@ -120,6 +120,20 @@ def infra_overlay(root,raw,item,contract,now):
     except (ValueError,TypeError,KeyError):return item
 
 
+def preparation_overlay(source,item,contract,now):
+    # Independent test receipts are historical evidence, never incident recovery or live progress.
+    if not isinstance(source,dict) or source.get('schema')!=1 or not isinstance(source.get('items'),list) or len(source['items'])>200:return item
+    rows=[r for r in source['items'] if isinstance(r,dict) and r.get('record_id')==item['record_id']]
+    if len(rows)!=1:return item
+    r=rows[0]
+    try:
+        if not isinstance(r['fingerprint'],str) or not re.fullmatch('[a-f0-9]{64}',r['fingerprint']):return item
+        p={k:r[k] for k in ('status','tested_at','checks')};p['current_occurrence']=r['fingerprint']==item['fingerprint']
+        candidate={**item,'preparation':p};contract.validate({'status':'ok','observed_at':now,'items':[candidate]})
+        return candidate
+    except (ValueError,TypeError,KeyError):return item
+
+
 def incident_work(root, now):
     unavailable={'status':'unavailable','observed_at':now,'items':[]}
     try:
@@ -133,6 +147,7 @@ def incident_work(root, now):
         import importlib.util
         spec=importlib.util.spec_from_file_location('reader_incident_schema',Path(__file__).with_name('incident_schema.py'))
         contract=importlib.util.module_from_spec(spec);spec.loader.exec_module(contract)
+        preparations=read(root/'profiles/ops/checkpoints/infra-results.json',65536)
         items=[]
         for w in raw['items']:
             execution=w.get('execution_id');row=rows.get(execution)
@@ -140,7 +155,7 @@ def incident_work(root, now):
             item.update(execution_key=hashlib.sha256(('ops:'+execution).encode()).hexdigest()[:24] if execution else None,
                 execution_state=row['status'] if row and row['status'] in ('claimed','running','completed','failed') else 'unknown',
                 execution_liveness=liveness(row) if row else 'unverified')
-            items.append(infra_overlay(root,w,item,contract,now))
+            items.append(preparation_overlay(preparations,infra_overlay(root,w,item,contract,now),contract,now))
         return contract.validate({'status':'ok','observed_at':now,'items':items})
     except (OSError,sqlite3.Error,ValueError,TypeError,KeyError,AttributeError,RecursionError):return unavailable
 
