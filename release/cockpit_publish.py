@@ -21,6 +21,8 @@ def sibling(name):
 
 
 reader, schema = sibling('cockpit_read'), sibling('cockpit')
+RELEASE_DIRECTORY=Path(__file__).resolve().parent
+RELEASE_LINK=Path('/opt/cpa-dashboard/current')
 
 
 def atomic(path, value, mode=0o600):
@@ -90,6 +92,7 @@ def refresh_local(directory, hermes_home, now=None):
     fd=os.open(directory/'cockpit-publish.lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
     with os.fdopen(fd,'a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX)
+        if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
         value=reader.read(directory/'cockpit.json')
         if value is None:return {'status':'local_source_unavailable'}
         schema.validate(value,now=now)

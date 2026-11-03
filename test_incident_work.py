@@ -1,4 +1,4 @@
-import copy,datetime as dt,hashlib,importlib.util,json,os,pathlib,sqlite3,subprocess,tempfile,unittest
+import concurrent.futures,fcntl,threading,copy,datetime as dt,hashlib,importlib.util,json,os,pathlib,sqlite3,subprocess,tempfile,unittest
 from unittest.mock import patch
 import incident_schema as schema
 import cockpit_read,cockpit_publish
@@ -70,10 +70,24 @@ class Incidents(unittest.TestCase):
    self.assertNotIn('execution_id',json.dumps(value));self.assertNotIn('prompt',json.dumps(value))
    with sqlite3.connect(dbpath) as db:db.execute("update executions set status='failed'")
    value=cockpit_read.incident_work(root,self.now.isoformat());self.assertEqual(value['items'][0]['execution_state'],'failed');self.assertEqual(value['items'][0]['execution_liveness'],'not_applicable')
+ def test_waiting_publisher_cannot_write_after_a_paired_rollback(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   root=pathlib.Path(tmp);(root/'cockpit.json').write_text(json.dumps(fixture(self.now)));before=(root/'cockpit.json').read_bytes()
+   link=root/'current';link.symlink_to(cockpit_publish.RELEASE_DIRECTORY,target_is_directory=True)
+   entered=threading.Event();flock=fcntl.flock
+   def observed(fd,how):
+    if how==fcntl.LOCK_EX:entered.set()
+    return flock(fd,how)
+   with (root/'cockpit-publish.lock').open('a') as lock,concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool,patch.object(cockpit_publish,'RELEASE_LINK',link),patch.object(cockpit_publish.fcntl,'flock',side_effect=observed):
+    flock(lock,fcntl.LOCK_EX)
+    future=pool.submit(cockpit_publish.refresh_local,root,root/'hermes',self.now)
+    self.assertTrue(entered.wait(2));link.unlink();link.symlink_to(root,target_is_directory=True)
+    flock(lock,fcntl.LOCK_UN);self.assertEqual(future.result(timeout=3)['status'],'stale_release')
+   self.assertEqual((root/'cockpit.json').read_bytes(),before)
  def test_local_report_publication_does_not_read_court_or_change_cadence(self):
   with tempfile.TemporaryDirectory() as tmp:
    root=pathlib.Path(tmp);saved=fixture(self.now-dt.timedelta(minutes=10));(root/'cockpit.json').write_text(json.dumps(saved));(root/'cockpit-cadence.json').write_text('{"last_attempt":123}')
-   with patch.object(cockpit_publish,'fetch_court',side_effect=AssertionError('External read')):
+   with patch.object(cockpit_publish,'fetch_court',side_effect=AssertionError('External read')),patch.object(cockpit_publish,'RELEASE_LINK',cockpit_publish.RELEASE_DIRECTORY):
     result=cockpit_publish.refresh_local(root,root/'hermes',self.now)
    self.assertEqual(result['status'],'local_published');value=json.loads((root/'cockpit.json').read_text());self.assertEqual(value['court'],saved['court']);self.assertEqual((root/'cockpit-cadence.json').read_text(),'{"last_attempt":123}')
 
