@@ -84,6 +84,7 @@ def publish(directory, config, now=None, court_read=fetch_court):
         except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
             value.update(tasks=[],profiles=[{'id':p,'status':'unavailable','stored_jobs':None} for p in sorted(schema.PROFILES)])
         schema.validate(value,now=now)
+        if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
         atomic(directory / 'cockpit.json', value, 0o640)
         return {'status': 'partial' if value['court']['status'] == 'unavailable' else 'published'}
 
@@ -95,7 +96,9 @@ def local_snapshot(directory, hermes_home, now):
     schema.validate(value,now=now)
     local=reader.hermes(hermes_home)
     value.update(collected_at=now.isoformat(),tasks=local['tasks'],profiles=local['profiles'],work=local['work'])
-    schema.validate(value,now=now);atomic(directory/'cockpit.json',value,0o640)
+    schema.validate(value,now=now)
+    if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
+    atomic(directory/'cockpit.json',value,0o640)
     return {'status':'local_published'}
 
 

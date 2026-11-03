@@ -34,6 +34,15 @@ class CockpitPublisherTests(unittest.TestCase):
                 result=cockpit_publish.publish(root,{},court_read=lambda _:self.fail('inactive external read'))
             self.assertEqual(result['status'],'stale_release')
             self.assertFalse((root/'cockpit-cadence.json').exists());self.assertFalse((root/'cockpit.json').exists())
+    def test_switch_during_external_read_cannot_replace_current_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);now=dt.datetime.now(dt.timezone.utc);before=fixture(now)
+            path=root/'cockpit.json';path.write_text(json.dumps(before));link=root/'current';link.symlink_to(cockpit_publish.RELEASE_DIRECTORY)
+            def external(_):
+                link.unlink();link.symlink_to(root/'new-release');return before['court']
+            with patch.object(cockpit_publish,'RELEASE_LINK',link):
+                result=cockpit_publish.publish(root,{'hermes_home':str(root/'hermes')},now=now,court_read=external)
+            self.assertEqual(result['status'],'stale_release');self.assertEqual(json.loads(path.read_text()),before)
     def test_existing_tick_publishes_once_per_fifteen_minutes_and_preserves_source_time(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
