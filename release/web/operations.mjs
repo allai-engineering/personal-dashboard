@@ -37,6 +37,14 @@ export function machineAction(m){
  if(codes.has('service')||codes.has('application'))return 'Открыть проверку службы или приложения в «Подробнее».';
  return ['critical','warning'].includes(m.tone)?'Открыть подробности проверки Hermes.':null;
 }
+export function batteryView(m,now,transportError=false){
+ const b=m.battery,fresh=!transportError&&b?.status==='ok'&&freshAt(b.observed_at,now,1800)&&freshAt(b.checked_at,now,1800);
+ const n=v=>Number.isInteger(v)&&v>=0&&v<=100?v:null;
+ if(!fresh)return {fresh:false,tone:'unknown',label:transportError?'Не удалось обновить батарею · 80% не подтверждены':b?.status==='ok'?'Данные батареи устарели · 80% не подтверждены':'Нет связи с датчиком батареи · 80% не подтверждены',charge:null,health:null,condition:'неизвестно',at:b?.checked_at};
+ const limit=b.limit_status==='ok'?n(b.limit_percent):null,confirmed=limit===80&&b.limit_enabled===true;
+ return {fresh:true,charge:n(b.charge_percent),health:n(b.health_percent),condition:{normal:'нормальное',service_recommended:'рекомендуется обслуживание',unknown:'неизвестно'}[b.health_condition]||'неизвестно',
+  tone:confirmed?'ok':limit!==null?'warning':'unknown',label:confirmed?'Лимит 80% подтверждён':limit===null?'Лимит неизвестен · 80% не подтверждены':b.limit_enabled===false?'Лимит выключен · 80% не подтверждены':`Лимит ${limit}% · требуется 80%`,at:b.observed_at};
+}
 function balanceCard(b,now,open){
  const card=el('article',null,'account resource-card '+b.tone);card.id='balance-'+b.id;
  const head=el('div',null,'service-top');head.append(el('h2',b.title),badge(b.tone));card.append(head);
@@ -53,15 +61,26 @@ function balanceCard(b,now,open){
  else d.append(el('p',b.unit==='credits'?'Кредиты Kie, не доллары. Предупреждение ниже 5 000 кр.; красный ниже 2 000 кр.':'Остаток аккаунта OpenRouter, не лимит отдельного ключа. Предупреждение ниже $25; красный ниже $10.','muted small'));
  return card;
 }
-function machineCard(m,now,open){
+function machineCard(m,now,open,transportError){
  const card=el('article',null,'account resource-card '+m.tone);card.id='machine-'+m.id;
  const head=el('div',null,'service-top');head.append(el('h2',m.id==='applications'?'Приложения и бэкапы':m.id),badge(m.tone));card.append(head);
  if(m.aliases?.length)card.append(el('p','Псевдонимы: '+m.aliases.join(', '),'muted small'));
+ const battery=m.kind==='physical_mac'?batteryView(m,now,transportError):null;
+ if(battery){
+  card.append(el('p',`Заряд: ${battery.charge===null?'неизвестен':battery.charge+'%'} · Здоровье: ${battery.health===null?'неизвестно':battery.health+'%'}`,'small'));
+  card.append(el('p',battery.label,'badge '+battery.tone));
+  card.append(el('p',`Батарея: ${battery.fresh?'замер':'проверка'} ${relativeTime(battery.at,now)}`,'muted small'));
+ }
  card.append(el('p',m.message,'resource-message'));
  const action=machineAction(m);if(action)card.append(el('p','Что сделать: '+action,'small'));
  const when=m.active.find(i=>i.severity!=='unknown')?.observed_at||m.observed_at;
  card.append(el('p',`Замер ${relativeTime(when,now)}`,'muted small'));
  const d=disclosure(card,'machine-'+m.id,open);detail(d,'Тип',kinds[m.kind]);detail(d,'Проверка машины',dateLabel(m.observed_at));
+ if(battery){
+  detail(d,'Состояние батареи',battery.condition);detail(d,'Циклы',battery.fresh&&Number.isInteger(m.battery.cycle_count)?String(m.battery.cycle_count):'Неизвестно');
+  detail(d,'Замер батареи',dateLabel(m.battery?.observed_at));
+  d.append(el('p','Здоровье — максимальная ёмкость по данным macOS. Подтверждённый лимит — прочитанная настройка; macOS иногда заряжает до 100% для калибровки.','muted small'));
+ }
  if(!m.hostFresh)d.append(el('p','Измерения ниже исторические; текущее состояние неизвестно.','warning small'));
  const metrics=m.metrics, n=(v,suffix)=>typeof v==='number'?new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(v)+suffix:'Не измерено';
  detail(d,'Минимум свободного диска',n(metrics.disk_free_percent,'%'));
@@ -88,7 +107,7 @@ export function renderOperations(snapshot,transportError,now){
  const ops=snapshot?.operations,balances=sortedBalances(ops,now,transportError),machines=sortedMachines(ops,now,transportError);
  const open=new Set([...document.querySelectorAll('details[data-operation][open]')].map(n=>n.dataset.operation));
  const balancesRoot=$('balances');balancesRoot.replaceChildren(...balances.map(b=>balanceCard(b,now,open)));
- const machineRoot=$('machines');machineRoot.replaceChildren(...machines.map(m=>machineCard(m,now,open)));
+ const machineRoot=$('machines');machineRoot.replaceChildren(...machines.map(m=>machineCard(m,now,open,transportError)));
  const okay=!transportError&&freshAt(ops?.collected_at,now,1800);
  $('operations-notice').hidden=okay;$('operations-notice').textContent='Нет свежего снимка машин и балансов. Числа не считаются текущими.';
  $('source-status').textContent=okay?'Источники и обновление':'Есть пробелы в данных · Подробнее';

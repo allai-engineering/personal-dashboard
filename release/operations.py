@@ -2,6 +2,11 @@
 import datetime as dt
 import math
 import re
+import importlib.util
+from pathlib import Path
+
+_spec=importlib.util.spec_from_file_location('dashboard_battery_schema',Path(__file__).with_name('battery_schema.py'))
+_battery=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(_battery)
 
 SCHEMA = 'personal-dashboard-operations-v1'
 PROVIDERS = {'openrouter': ('OpenRouter', 'USD'), 'kie': ('Kie', 'credits'), 'digitalocean': ('DigitalOcean', 'USD')}
@@ -99,7 +104,7 @@ def validate_aliases(machines):
                 raise ValueError('machine_aliases')
             used.add(name)
 
-def fleet(inventory, latest, current, now):
+def fleet(inventory, latest, current, now, batteries=None):
     if inventory.get('schema') != 1 or latest.get('schema') != 1 or current.get('schema') != 1:
         raise ValueError('fleet_schema')
     entries, probes = inventory['machines'], latest['machines']
@@ -143,6 +148,7 @@ def fleet(inventory, latest, current, now):
         records.append({'id': mid, 'kind': entry.get('kind') if entry.get('kind') in KINDS else 'unknown',
                         'state': state, 'observed_at': observed, 'metrics': metrics, 'issues': list(unique.values())})
         if entry.get('aliases'): records[-1]['aliases'] = list(entry['aliases'])
+        if entry.get('kind')=='physical_mac': records[-1]['battery']=_battery.validate((batteries or {}).get(mid,_battery.empty('not_connected')))
     lookup = {m['id']: m for m in records}
     if len(lookup) != len(records): raise ValueError('duplicate_inventory')
     for raw in current.get('summary', {}).get('issues', []):
@@ -185,10 +191,13 @@ def validate(value):
         if f[k] is not None: number(f[k],0,200)
     ids = set()
     for m in f['machines']:
-        exact(m, 'id kind state observed_at metrics issues' + (' aliases' if 'aliases' in m else ''))
+        exact(m, 'id kind state observed_at metrics issues' + (' aliases' if 'aliases' in m else '') + (' battery' if 'battery' in m else ''))
         if not re.fullmatch(r'[A-Za-z0-9_.-]{1,80}',m['id']) or m['id'] in ids: raise ValueError('machine')
         ids.add(m['id'])
         if m['kind'] not in KINDS or m['state'] not in ('observed_ok','degraded','unreachable','not_enrolled','unknown'): raise ValueError('state')
+        if 'battery' in m:
+            if m['kind']!='physical_mac': raise ValueError('battery_kind')
+            _battery.validate(m['battery'])
         if m['observed_at'] is not None: timestamp(m['observed_at'])
         exact(m['metrics'],'disk_free_percent memory_available_percent load1 cpu_count')
         for k,v in m['metrics'].items():

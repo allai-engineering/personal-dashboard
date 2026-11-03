@@ -43,6 +43,17 @@ class Tests(unittest.TestCase):
   self.assertEqual([m['id'] for m in result['machines']],['node-a','unconfirmed'])
   self.assertEqual(result['machines'][0]['aliases'],['old-node'])
   self.assertEqual(result['machines'][1]['state'],'unknown')
+ def test_battery_attaches_only_to_existing_mac_without_refreshing_host(self):
+  t=self.now.isoformat();sample=o._battery.empty('ok',t);sample.update(observed_at=t,charge_percent=100,health_percent=89,health_condition='normal',limit_status='ok',limit_percent=80,limit_enabled=True)
+  inv={'schema':1,'machines':[{'id':'mac','kind':'physical_mac','enabled':False},{'id':'vm','kind':'virtual_machine','enabled':True}]}
+  latest={'schema':1,'observed_at':t,'machines':[]};current={'schema':1,'observed_at':t,'summary':{'issues':[]}}
+  result=o.fleet(inv,latest,current,self.now,{'mac':sample,'vm':sample,'not-in-inventory':sample})
+  self.assertEqual(len(result['machines']),2);self.assertEqual(result['machines'][0]['battery']['limit_percent'],80)
+  self.assertEqual(result['machines'][0]['state'],'unknown');self.assertNotIn('battery',result['machines'][1])
+ def test_failed_battery_cannot_retain_confirmed_limit(self):
+  d={'schema':o.SCHEMA,'read_only':True,'collected_at':self.now.isoformat(),'balances':[o.unavailable_balance(p,'unavailable',self.now) for p in o.PROVIDERS],'fleet':self.make_fleet()}
+  d['fleet']['machines'][0]['battery'].update(limit_percent=80,limit_enabled=True)
+  with self.assertRaises(ValueError):o.validate(d)
  def test_alias_validation_is_bounded_and_unambiguous(self):
   d={'schema':o.SCHEMA,'read_only':True,'collected_at':self.now.isoformat(),'balances':[o.unavailable_balance(p,'unavailable',self.now) for p in o.PROVIDERS],'fleet':self.make_fleet()}
   d['fleet']['machines'][0]['aliases']=['old-node'];o.validate(d)
