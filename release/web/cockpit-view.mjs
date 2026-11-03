@@ -90,6 +90,10 @@ export function preparationLabel(item){
  return (p.current_occurrence?'Последний план':'План прошлого запуска')+': '+(p.status==='passed_conditional'?`${p.checks} Linux-проверок пройдено · план условный`:'проверки не пройдены');
 }
 export function incidentView(record,work,now=Date.now(),transportError=false){
+ const item=work?.status==='ok'?work.items.find(w=>w.record_id===record.id&&w.preparation):null;
+ return {...incidentStage(record,work,now,transportError),preparation:item?{label:preparationLabel(item),at:item.preparation.tested_at}:null};
+}
+function incidentStage(record,work,now,transportError){
  const key=record.condition_key||JSON.stringify([record.state,record.reason,record.value]);
  const item=work?.status==='ok'?work.items.find(w=>w.record_id===record.id&&w.condition_key===key&&(w.source_state===record.state||record.unconfirmed&&w.source_state==='unknown')):null;
  if(!item)return {lane:'hermes',label:'Передача ещё не подтверждена',action:null,blocker:'Нет актуальной записи ops по этой проблеме',item:null};

@@ -51,3 +51,18 @@ assert.equal(maintenanceWork(clear,{...work,items:[tested]},now).active,true);
 assert.equal(incidentView(record,{...work,items:[{...tested,source_state:'open',state:'waiting',blocker:'awaiting_source'}]},now).blocker,'Нет свежих данных источника');
 assert.match(preparationLabel({...tested,preparation:{...tested.preparation,current_occurrence:false}}),/прошлого запуска/);
 assert.match(preparationLabel({...tested,preparation:{...tested.preparation,status:'failed'}}),/не пройдены/);
+
+// A historical test receipt survives a source-condition gap without reviving old work.
+const historyItem={...tested,condition_key:'disk:warning',source_state:'clear',state:'waiting',blocker:'awaiting_source'};
+const gapRecord={id:record.id,state:'unknown',condition_key:'source:stale'};
+const gapStage=incidentView(gapRecord,{...work,items:[historyItem]},now);
+assert.equal(gapStage.item,null);
+assert.equal(gapStage.lane,'hermes');
+assert.match(gapStage.preparation.label,/17 Linux-проверок пройдено · план условный/);
+assert.equal(gapStage.preparation.at,stamp);
+assert.doesNotMatch(gapStage.label,/на связи|Восстановление проверено/);
+const oldDecision={...historyItem,state:'needs_user',blocker:'owner_approval',decision:'Old owner request'};
+const oldDecisionGap=incidentView(gapRecord,{...work,items:[oldDecision]},now);
+assert.equal(oldDecisionGap.item,null);assert.equal(oldDecisionGap.lane,'hermes');
+assert.deepEqual(Object.keys(oldDecisionGap.preparation).sort(),['at','label']);
+assert.equal(incidentView(gapRecord,{status:'unavailable',items:[historyItem]},now).preparation,null);
