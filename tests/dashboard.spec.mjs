@@ -151,6 +151,7 @@ test('preparation remains visible after the source becomes healthy',async({page}
  body.cockpit.work.items[0].preparation={status:'passed_conditional',tested_at:stamp,checks:17,current_occurrence:true};
  await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('17 Linux-проверок пройдено · план условный');
  await expect(page.locator('#cockpit-work')).toContainText('Нужна проверенная процедура исправления');
+ await page.locator('#cockpit-work summary').click();
  await page.locator('#cockpit-work .cockpit-row').filter({hasText:m.id}).getByRole('link').click();
  await expect(page.locator('#evidence-content')).toContainText('не подтверждает очистку');
  await page.locator('#nav-machines').click();await expect(page.locator('#machine-'+m.id)).toContainText('17 Linux-проверок пройдено · план условный');
