@@ -142,7 +142,7 @@ test('technical incidents belong to Hermes and only explicit owner requests beco
  item.execution_state='failed';item.execution_liveness='not_applicable';await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('Запуск остановился без итога по проблеме');
  item.state='waiting';item.blocker='no_safe_procedure';await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('Нужна проверенная процедура исправления');
  await page.locator('#nav-machines').click();await expect(page.locator('#machine-'+m.id)).toContainText('Последний этап: Диагностика служб');await expect(page.locator('#machine-'+m.id)).not.toContainText('Что сделать:');
- await page.locator('#nav-overview').click();await page.screenshot({path:testInfo.outputPath('incident-handoff.png'),fullPage:true});
+ await page.screenshot({path:testInfo.outputPath('incident-machine.png'),fullPage:true});await page.locator('#nav-overview').click();await expect(page.locator('#page-overview')).toBeVisible();await page.screenshot({path:testInfo.outputPath('incident-handoff.png'),fullPage:true});
  item.state='needs_user';item.blocker='owner_approval';item.decision='Разрешить тестовую процедуру с указанным окном?';await page.locator('#refresh').click();
  await expect(page.locator('#cockpit-decisions')).toContainText(m.id);await expect(page.locator('#cockpit-decisions')).toContainText(item.decision);
  m.issues[0].severity='critical';await page.locator('#refresh').click();await expect(page.locator('#cockpit-decisions')).not.toContainText(m.id);await expect(page.locator('#cockpit-work')).toContainText('Передача ещё не подтверждена');

@@ -97,5 +97,5 @@ export function incidentView(record,work,now=Date.now(),transportError=false){
   const live=item.execution_liveness==='verified'&&['claimed','running'].includes(item.execution_state)&&freshAt(work.observed_at,now,120);
   return {lane:'hermes',label:live?'В работе · процесс подтверждён':['completed','failed'].includes(item.execution_state)?'Запуск остановился без итога по проблеме':'Текущая работа не подтверждена',action,blocker:live?null:item.execution_state==='failed'?'Ошибка исполнения':blocker,item};
  }
- return {lane:'hermes',label:item.source_state==='clear'?'В новом замере проблема не видна':item.state==='needs_user'?'Нужно перепроверить запрос к владельцу':'Остановился · '+(blocker||'ожидание'),action,blocker,item};
+ return {lane:'hermes',label:item.source_state==='clear'?'В новом замере проблема не видна':item.state==='needs_user'?'Нужно перепроверить запрос к владельцу':'Остановился · ожидание',action,blocker,item};
 }
