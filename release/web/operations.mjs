@@ -1,4 +1,4 @@
-import {incidentView} from './cockpit-view.mjs';
+import {incidentView,maintenanceWork} from './cockpit-view.mjs';
 import {integrationRows} from './integrations-view.mjs';
 import {sortedBalances,sortedMachines,freshAt,machineCondition} from './operations-view.mjs';
 import {relativeTime,dateLabel} from './account-view.mjs';
@@ -73,8 +73,9 @@ function machineCard(m,now,open,transportError,work){
   card.append(el('p',`Батарея: ${battery.fresh?'замер':'проверка'} ${relativeTime(battery.at,now)}`,'muted small'));
  }
  card.append(el('p',m.message,'resource-message'));
- if(m.tone!=='ok'){
-  const stage=incidentView({id:'machine-'+m.id,condition_key:machineCondition(m),state:['critical','warning'].includes(m.tone)?'open':'unknown'},work,now,transportError);
+ const record={id:'machine-'+m.id,condition_key:machineCondition(m),state:m.tone==='ok'?'clear':['critical','warning'].includes(m.tone)?'open':'unknown'};
+ const stage=m.tone==='ok'?maintenanceWork(record,work,now,transportError):incidentView(record,work,now,transportError);
+ if(stage){
   card.append(el('p','Hermes: '+stage.label,'small'));
   if(stage.action)card.append(el('p','Последний этап: '+stage.action,'small'));
   if(stage.blocker)card.append(el('p',stage.blocker,'small'));
