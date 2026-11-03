@@ -28,3 +28,7 @@ const infra={...dead,actor:'infra-dev',execution_state:'running',execution_liven
 assert.match(incidentView(record,{...work,items:[infra]},now).label,/infra-dev · владелец на связи/);
 infra.execution_state='completed';assert.match(incidentView(record,{...work,items:[infra]},now).label,/без итога/);
 infra.state='waiting';infra.blocker='awaiting_source';assert.equal(incidentView(record,{...work,items:[infra]},now).lane,'hermes');
+infra.blocker='no_safe_procedure';
+const stale=incidentView(record,{...work,items:[infra]},now+1801e3);
+assert.match(stale.label,/Последняя запись/);assert.match(stale.blocker,/процедура/);assert.equal(stale.action,'Разбор причины');
+assert.equal(incidentView(record,{...work,items:[infra]},now,true).lane,'hermes');

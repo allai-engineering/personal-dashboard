@@ -31,6 +31,13 @@ class Incidents(unittest.TestCase):
   ops.continuation(state,evidence,later+dt.timedelta(hours=2),schema);self.assertEqual(state['resume_generation'],2)
   evidence['items'][0]['execution_state']='failed';evidence['items'][0]['execution_liveness']='not_applicable'
   ops.continuation(state,evidence,later+dt.timedelta(hours=2),schema);self.assertEqual(state['resume_generation'],3)
+ def test_transient_stale_source_preserves_blocker_occurrence_and_owner(self):
+  state=self.state();ops.report(state,self.payload(state['items'][0]),'execution',self.now,schema)
+  before=copy.deepcopy(state['items'][0]);later=self.now+dt.timedelta(minutes=31)
+  stale=ops.reconcile(state,[self.record('unknown','source:stale')],later)
+  restored=ops.reconcile(stale,[self.record()],later+dt.timedelta(minutes=1))
+  for key in ('fingerprint','state','action','blocker','execution_id','updated_at'):
+   self.assertEqual(restored['items'][0][key],before[key],key)
  def test_proven_dead_execution_resumes_but_unverified_execution_does_not(self):
   state=self.state();state['items'][0]['state']='accepted';later=self.now+dt.timedelta(hours=2)
   evidence={'items':[{'record_id':'machine-node','state':'accepted','execution_state':'running','execution_liveness':'unverified'}]}
