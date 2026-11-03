@@ -25,7 +25,7 @@ class CockpitReleaseTests(unittest.TestCase):
             original_unit=root/'cpa-dashboard.service';original_unit.write_bytes(b'old dashboard unit')
             paths['latest'].write_bytes(b'old receipt')
             data=root/'data';data.mkdir();(data/'cockpit.json').write_bytes(b'old sidecar')
-            files={'release/server.py':b'new server','release/cockpit.py':b'new schema','release/web/index.html':b'new ui'}
+            files={'deployment/cockpit_launch.py':b'synthetic launcher','release/server.py':b'new server','release/cockpit.py':b'new schema','release/web/index.html':b'new ui'}
             files.update({'release/'+n:b'synthetic source' for n in ('operations.py','integrations.py','cockpit_read.py','cockpit_publish.py')})
             files.update({'release/web/'+n:b'protected' for n in m.ui.PROTECTED_WEB})
             payload={'sha':'a'*40,'expected_current':str(old),'expected_policy_sha256':m.ui.sha(policy_path),
@@ -33,7 +33,8 @@ class CockpitReleaseTests(unittest.TestCase):
             def command(args,**kwargs):
                 if args[:3]==['systemctl','start','dashboard-cockpit.service']:
                     unit=paths['publisher'].read_text()
-                    self.assertIn('ExecStart=/usr/bin/python3 -I -B '+str(current/'cockpit_publish.py')+'\n',unit)
+                    self.assertIn('ExecStart=/usr/bin/python3 -I -B '+str(paths['launcher'])+'\n',unit)
+                    self.assertEqual(paths['launcher'].read_bytes(),files['deployment/cockpit_launch.py'])
                     self.assertTrue((current/'cockpit_publish.py').is_file())
                 if shutdown_error and args[:2]==['systemctl','disable']:
                     raise ValueError('shutdown_failed')
