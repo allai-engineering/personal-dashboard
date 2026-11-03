@@ -23,6 +23,11 @@ def reconcile(previous,records,now):
   if r['source_state']=='clear':
    if old:old.update(source_state='clear',source_at=r['source_at'])
    continue
+  if old and r['source_state']=='unknown' and old['source_state']!='clear':
+   # A transport/freshness gap is not a new occurrence of the fault.
+   old.update(source_state='unknown',source_at=r['source_at'])
+   if old['state']=='resolved':old.update(state='waiting',action='verify_recovery',blocker='awaiting_source',decision=None)
+   continue
   fingerprint=hashlib.sha256(json.dumps([key,r['condition_key'],stamp,old.get('fingerprint') if old else None]).encode()).hexdigest()
   if old and old['condition_key']==r['condition_key'] and old['source_state']!='clear':
    old.update(source_state=r['source_state'],source_at=r['source_at'],subject=r.get('subject',key));continue

@@ -80,7 +80,7 @@ function evidence(now){
  if(displayTitle(r.title)!==r.title)root.append(el('p','Название в источнике: '+r.title,'muted small'));
  if(r.unconfirmed)root.append(el('p','Ранее проблема была подтверждена. Сейчас данных для проверки её состояния нет.','notice'));
  root.append(el('p',r.detail),table([['Ответственный',r.owner||'Не подтверждён'],['Время наблюдения',r.observedAt?dateLabel(r.observedAt):'Неизвестно'],...r.evidence]));
- if(r.work){root.append(table([['Передача',r.work.label],['Последний этап',r.work.action],['Остановка',r.work.blocker],['Отметка Hermes',r.work.item?dateLabel(r.work.item.updated_at):null],['Запуск',r.work.item?.execution_state],['Задача',r.work.item?.task_ref]]));}
+ if(r.work){root.append(table([['Передача',r.work.label],['Последний этап',r.work.action],['Остановка',r.work.blocker],['Отметка Hermes',r.work.item?dateLabel(r.work.item.updated_at):null],['Запуск на замере',r.work.item?.execution_state],['Статус прочитан',r.work.observedAt?dateLabel(r.work.observedAt):null],['Задача',r.work.item?.task_ref]]));}
  const action=issueAction(r);if(action)root.append(el('p','Что сделать: '+action));
  if(r.domain&&domains[r.domain]){const source=el('a','Открыть раздел «'+domains[r.domain]+'»','cockpit-action');source.href='#'+r.domain;root.append(source);}
  root.append(el('p','Просмотр не означает решение. Новая или изменившаяся проблема появляется снова; важная остаётся наверху. История до открытия этой вкладки не восстанавливается.','muted small'));

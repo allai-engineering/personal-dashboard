@@ -6,6 +6,7 @@ P=pathlib.Path
 REPO='allai-engineering/personal-dashboard'
 ROOT=P('/var/lib/dashboard-ui');CURRENT=P('/opt/cpa-dashboard/current')
 POLICY=P('/etc/dashboard-ui/policy.json');MAX_BYTES=8*1024*1024
+RELEASE_GATE=P('/run/dashboard-release.lock')
 PROTECTED_WEB={'login.html','login.css','limits.mjs','model.mjs','sources.mjs','account-view.mjs','operations-view.mjs','integrations-view.mjs'}
 
 def fail(code):raise ValueError(code)
@@ -112,9 +113,14 @@ def session(old):
  return auth.cookie().split(';',1)[0]
 def restart():subprocess.run(['systemctl','restart','cpa-dashboard.service'],check=True,capture_output=True,timeout=25)
 def switch(target):
- link=CURRENT.parent/'.ui-current'
- if link.exists() or link.is_symlink():fail('release_link_busy')
- link.symlink_to(target);os.replace(link,CURRENT)
+ fd=os.open(RELEASE_GATE,os.O_CREAT|os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,0o644)
+ with os.fdopen(fd,'rb') as gate:
+  if not stat.S_ISREG(os.fstat(gate.fileno()).st_mode):fail('release_gate')
+  os.fchmod(gate.fileno(),0o644)
+  fcntl.flock(gate,fcntl.LOCK_EX)
+  link=CURRENT.parent/'.ui-current'
+  if link.exists() or link.is_symlink():fail('release_link_busy')
+  link.symlink_to(target);os.replace(link,CURRENT)
 def health(cookie,assets):
  ready=False
  for _ in range(25):

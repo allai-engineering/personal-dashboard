@@ -11,6 +11,8 @@ from deployment import cockpit_release as m
 
 
 class CockpitReleaseTests(unittest.TestCase):
+    def setUp(self):
+        tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);mock=patch.object(m.ui,'RELEASE_GATE',Path(tmp.name)/'release.lock');mock.start();self.addCleanup(mock.stop)
     def exercise_failed_activation(self,shutdown_error=False):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp).resolve();releases=root/'releases';old=releases/'old';old.mkdir(parents=True)

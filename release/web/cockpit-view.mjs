@@ -87,15 +87,16 @@ export const workActions={diagnose:'Разбор причины',check_access:'�
 export const workBlockers={none:null,no_access:'Нет подтверждённого доступа',no_safe_procedure:'Нужна проверенная процедура исправления',active_work:'На машине идёт работа',awaiting_source:'Нет свежих данных источника',upstream:'Внешний сервис недоступен',execution_failed:'Запуск завершился с ошибкой',login_required:'Нужен вход владельца',payment_required:'Нужна оплата',owner_approval:'Нужно решение владельца'};
 export function incidentView(record,work,now=Date.now(),transportError=false){
  const key=record.condition_key||JSON.stringify([record.state,record.reason,record.value]);
- const item=work?.status==='ok'&&freshAt(work.observed_at,now,1800)&&!transportError?work.items.find(w=>w.record_id===record.id&&w.condition_key===key&&w.source_state===record.state):null;
+ const item=work?.status==='ok'?work.items.find(w=>w.record_id===record.id&&w.condition_key===key&&(w.source_state===record.state||record.unconfirmed&&w.source_state==='unknown')):null;
  if(!item)return {lane:'hermes',label:'Передача ещё не подтверждена',action:null,blocker:'Нет актуальной записи ops по этой проблеме',item:null};
  const action=workActions[item.action],blocker=workBlockers[item.blocker];
- if(item.state==='queued')return {lane:'hermes',label:'Передано ops · ждёт разбора',action:null,blocker:null,item};
- if(item.state==='needs_user'&&record.state!=='clear'&&!record.unconfirmed&&freshAt(item.source_at,now,1800)&&['login_required','payment_required','owner_approval'].includes(item.blocker)&&item.decision)return {lane:'owner',label:'Нужно ваше решение',action,blocker,item};
- if(item.state==='resolved'&&item.source_state==='clear')return {lane:'hermes',label:'Восстановление проверено',action,blocker:null,item};
+ if(transportError||!freshAt(work.observed_at,now,1800))return {lane:'hermes',label:'Последняя запись · текущее состояние не подтверждено',action,blocker,item,observedAt:work.observed_at};
+ if(item.state==='queued')return {lane:'hermes',label:'Передано ops · ждёт разбора',action:null,blocker:null,item,observedAt:work.observed_at};
+ if(item.state==='needs_user'&&record.state!=='clear'&&!record.unconfirmed&&freshAt(item.source_at,now,1800)&&['login_required','payment_required','owner_approval'].includes(item.blocker)&&item.decision)return {lane:'owner',label:'Нужно ваше решение',action,blocker,item,observedAt:work.observed_at};
+ if(item.state==='resolved'&&item.source_state==='clear')return {lane:'hermes',label:'Восстановление проверено',action,blocker:null,item,observedAt:work.observed_at};
  if(item.state==='accepted'){
   const live=item.execution_liveness==='verified'&&['claimed','running'].includes(item.execution_state)&&freshAt(work.observed_at,now,120);
-  return {lane:'hermes',label:live?(item.actor==='infra-dev'?'infra-dev · владелец на связи':'В работе · процесс подтверждён'):(['completed','failed'].includes(item.execution_state)||item.execution_liveness==='not_live')?'Запуск остановился без итога по проблеме':'Текущая работа не подтверждена',action,blocker:live?null:item.execution_state==='failed'?'Ошибка исполнения':blocker,item};
+  return {lane:'hermes',label:live?(item.actor==='infra-dev'?'infra-dev · владелец на связи':'В работе · процесс подтверждён'):(['completed','failed'].includes(item.execution_state)||item.execution_liveness==='not_live')?'Запуск остановился без итога по проблеме':'Текущая работа не подтверждена',action,blocker:live?null:item.execution_state==='failed'?'Ошибка исполнения':blocker,item,observedAt:work.observed_at};
  }
- return {lane:'hermes',label:item.source_state==='clear'?'В новом замере проблема не видна':item.state==='needs_user'?'Нужно перепроверить запрос к владельцу':'Остановился · ожидание',action,blocker,item};
+ return {lane:'hermes',label:item.source_state==='clear'?'В новом замере проблема не видна':item.state==='needs_user'?'Нужно перепроверить запрос к владельцу':item.actor==='infra-dev'?'infra-dev · остановился':'Остановился · ожидание',action,blocker,item,observedAt:work.observed_at};
 }

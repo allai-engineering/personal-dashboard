@@ -23,6 +23,17 @@ def sibling(name):
 reader, schema = sibling('cockpit_read'), sibling('cockpit')
 RELEASE_DIRECTORY=Path(__file__).resolve().parent
 RELEASE_LINK=Path('/opt/cpa-dashboard/current')
+RELEASE_GATE=Path('/run/dashboard-release.lock')
+
+
+def commit_snapshot(path,value):
+    fd=os.open(RELEASE_GATE,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    with os.fdopen(fd,'rb') as gate:
+        if not stat.S_ISREG(os.fstat(gate.fileno()).st_mode):raise ValueError('release_gate')
+        fcntl.flock(gate,fcntl.LOCK_SH)
+        if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return False
+        atomic(path,value,0o640)
+        return True
 
 
 def atomic(path, value, mode=0o600):
@@ -60,11 +71,12 @@ def publish(directory, config, now=None, court_read=fetch_court):
     fd = os.open(directory / 'cockpit-publish.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
         state_path = directory / 'cockpit-cadence.json'
         state = reader.read(state_path) or {}
         last = state.get('last_attempt')
         if type(last) in (int, float) and now.timestamp() - last < 900:
-            return {'status': 'not_due'}
+            return local_snapshot(directory, Path(config['hermes_home']), now)
         atomic(state_path, {'last_attempt': now.timestamp()})
         value={'schema':schema.SCHEMA,'collected_at':now.isoformat(),'read_only':True,
                'court':None,'tasks':[],'profiles':[],'events':[]}
@@ -83,8 +95,22 @@ def publish(directory, config, now=None, court_read=fetch_court):
         except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
             value.update(tasks=[],profiles=[{'id':p,'status':'unavailable','stored_jobs':None} for p in sorted(schema.PROFILES)])
         schema.validate(value,now=now)
-        atomic(directory / 'cockpit.json', value, 0o640)
+        if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
+        if not commit_snapshot(directory/'cockpit.json',value):return {'status':'stale_release'}
         return {'status': 'partial' if value['court']['status'] == 'unavailable' else 'published'}
+
+
+def local_snapshot(directory, hermes_home, now):
+    if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
+    value=reader.read(directory/'cockpit.json')
+    if value is None:return {'status':'local_source_unavailable'}
+    schema.validate(value,now=now)
+    local=reader.hermes(hermes_home)
+    value.update(collected_at=now.isoformat(),tasks=local['tasks'],profiles=local['profiles'],work=local['work'])
+    schema.validate(value,now=now)
+    if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
+    if not commit_snapshot(directory/'cockpit.json',value):return {'status':'stale_release'}
+    return {'status':'local_published'}
 
 
 def refresh_local(directory, hermes_home, now=None):
@@ -92,14 +118,7 @@ def refresh_local(directory, hermes_home, now=None):
     fd=os.open(directory/'cockpit-publish.lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
     with os.fdopen(fd,'a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX)
-        if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
-        value=reader.read(directory/'cockpit.json')
-        if value is None:return {'status':'local_source_unavailable'}
-        schema.validate(value,now=now)
-        local=reader.hermes(hermes_home)
-        value.update(collected_at=now.isoformat(),tasks=local['tasks'],profiles=local['profiles'],work=local['work'])
-        schema.validate(value,now=now);atomic(directory/'cockpit.json',value,0o640)
-        return {'status':'local_published'}
+        return local_snapshot(directory, hermes_home, now)
 
 
 if __name__ == '__main__':

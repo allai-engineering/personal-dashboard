@@ -139,11 +139,12 @@ def apply(payload):
         ui.atomic(FILES['dashboard'],('[Service]\nExecStart=\nExecStart='+shlex.join(args)+'\n').encode(),0o644)
         unit='[Unit]\nDescription=Read existing Court and Hermes evidence for Captain Cockpit\nAfter=network-online.target\n[Service]\nType=oneshot\nUser=hermes\nGroup=hermes\nSupplementaryGroups=cpa-dashboard\nExecStart=/usr/bin/python3 -I -B '+str(new/'cockpit_publish.py')+'\nUMask=0077\nTimeoutStartSec=55\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=full\nProtectHome=true\nInaccessiblePaths=-/etc/cpa-dashboard/http-auth.json -/var/lib/cliproxyapi\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n'
         ui.atomic(FILES['publisher'],unit.encode(),0o644)
-        ui.atomic(FILES['timer'],b'[Unit]\nDescription=Publish Captain Cockpit evidence every 15 minutes\n[Timer]\nOnBootSec=15min\nOnUnitInactiveSec=15min\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n',0o644)
+        ui.atomic(FILES['timer'],b'[Unit]\nDescription=Refresh local task status; external sources keep their 15-minute gate\n[Timer]\nOnBootSec=30s\nOnUnitInactiveSec=30s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n',0o644)
         command(['systemd-analyze','verify',str(FILES['publisher']),str(FILES['timer'])])
         command(['systemctl','daemon-reload'])
+        ui.switch(new)
         command(['systemctl','start','dashboard-cockpit.service'],timeout=60)
-        ui.switch(new);ui.restart()
+        ui.restart()
         assets={n[len('release/'):]:b for n,b in files.items() if n.startswith('release/web/')}
         ui.health(cookie,assets);verify_sidecar()
         if guard(policy)!=before:ui.fail('protected_runtime_changed')
@@ -153,7 +154,7 @@ def apply(payload):
         command(['systemctl','enable','--now','dashboard-cockpit.timer'])
         if command(['systemctl','is-active','dashboard-cockpit.timer']).strip()!='active':ui.fail('timer_not_active')
         receipt={'commit':payload['sha'],'ci_run':run,'release':str(new),'previous':str(old),'backup':str(backup),
-            'applied_at':dt.datetime.now(dt.timezone.utc).isoformat(),'protected_unchanged':True,'auth_session_preserved':True,'publisher_interval_seconds':900,'core_release':True}
+            'applied_at':dt.datetime.now(dt.timezone.utc).isoformat(),'protected_unchanged':True,'auth_session_preserved':True,'publisher_interval_seconds':30,'external_read_interval_seconds':900,'core_release':True}
         ui.atomic(FILES['latest'],json.dumps(receipt).encode(),0o600)
         ui.atomic(backup/'receipt.json',json.dumps(receipt).encode(),0o600)
         return receipt

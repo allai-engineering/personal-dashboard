@@ -11,6 +11,8 @@ def archive(files):
  return b.getvalue()
 
 class UIReleaseTests(unittest.TestCase):
+ def setUp(self):
+  tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);mock=patch.object(m,'RELEASE_GATE',pathlib.Path(tmp.name)/'release.lock');mock.start();self.addCleanup(mock.stop)
  def test_paths_and_protected_data_login(self):
   for name in ['web/index.html','web/new-page.mjs','web/assets/chart.png']:self.assertEqual(m.validate_web(name),name)
   for name in ['../x','/web/index.html','web/../server.py','web/.hidden.css','web/login.html','web/limits.mjs','web/model.mjs','server.py','web/assets/malware.py','web/assets/page.svg']:
