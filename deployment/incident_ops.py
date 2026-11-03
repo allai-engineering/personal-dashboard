@@ -25,7 +25,7 @@ def reconcile(previous,records,now):
    continue
   fingerprint=hashlib.sha256(json.dumps([key,r['condition_key'],stamp,old.get('fingerprint') if old else None]).encode()).hexdigest()
   if old and old['condition_key']==r['condition_key'] and old['source_state']!='clear':
-   old.update(source_state=r['source_state'],source_at=r['source_at']);continue
+   old.update(source_state=r['source_state'],source_at=r['source_at'],subject=r.get('subject',key));continue
   items[key]={**r,'fingerprint':fingerprint,'queued_at':stamp,'updated_at':stamp,'state':'queued','action':'diagnose','blocker':'none','decision':None,'task_ref':old.get('task_ref') if old else None,'execution_id':None}
  # Missing evidence preserves the incident and suspends decisions; it is never recovery.
  for key,w in items.items():
@@ -61,7 +61,7 @@ def report(state,payload,execution_id,now,schema):
  if row.get('task_ref') and payload['task_ref'] not in (None,row['task_ref']):raise ValueError('task_identity_change')
  payload={**payload,'task_ref':payload['task_ref'] or row.get('task_ref')}
  candidate={**row,**payload,'execution_id':execution_id,'updated_at':now.isoformat()}
- public={k:v for k,v in candidate.items() if k!='execution_id'}
+ public={k:v for k,v in candidate.items() if k not in ('execution_id','subject')}
  public.update(execution_key=hashlib.sha256(('ops:'+execution_id).encode()).hexdigest()[:24],execution_state='running',execution_liveness='verified')
  schema.validate({'status':'ok','observed_at':now.isoformat(),'items':[public]})
  if candidate['state']=='queued':raise ValueError('report_requires_result')

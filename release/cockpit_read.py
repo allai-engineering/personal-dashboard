@@ -117,7 +117,7 @@ def incident_work(root, now):
         items=[]
         for w in raw['items']:
             execution=w.get('execution_id');row=rows.get(execution)
-            item={k:v for k,v in w.items() if k!='execution_id'}
+            item={k:v for k,v in w.items() if k not in ('execution_id','subject')}
             item.update(execution_key=hashlib.sha256(('ops:'+execution).encode()).hexdigest()[:24] if execution else None,
                 execution_state=row['status'] if row and row['status'] in ('claimed','running','completed','failed') else 'unknown',
                 execution_liveness=liveness(row) if row else 'unverified')
