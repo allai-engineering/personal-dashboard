@@ -151,7 +151,7 @@ def hermes(root):
     for profile in PROFILES:
         home = root if profile == 'default' else root / 'profiles' / profile
         job_data = read(home / 'cron/jobs.json')
-        jobs_valid = isinstance(job_data,dict) and isinstance(job_data.get('jobs'),list) and all(isinstance(j,dict) for j in job_data['jobs'])
+        jobs_valid = isinstance(job_data,dict) and isinstance(job_data.get('jobs'),list) and all(isinstance(j,dict) and isinstance(j.get('id'),str) for j in job_data['jobs'])
         job_data = job_data if isinstance(job_data,dict) else {}
         jobs = job_data.get('jobs', []) if isinstance(job_data, dict) else []
         jobs = jobs if isinstance(jobs, list) else []

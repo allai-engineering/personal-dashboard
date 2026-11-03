@@ -30,7 +30,8 @@ class InfraProgress(unittest.TestCase):
   self.assertEqual(profile()['status'],'unavailable');self.assertIsNone(profile()['stored_jobs'])
   jobs=self.root/'profiles/infra-dev/cron/jobs.json';jobs.parent.mkdir(parents=True);jobs.write_text('{"jobs": []}')
   self.assertEqual(profile()['status'],'empty');self.assertEqual(profile()['stored_jobs'],0)
-  jobs.write_text('{"jobs":[null]}');self.assertEqual(profile()['status'],'unavailable');self.assertIsNone(profile()['stored_jobs'])
+  for invalid in [None,{}, {'id':None}]:
+   jobs.write_text(json.dumps({'jobs':[invalid]}));self.assertEqual(profile()['status'],'unavailable');self.assertIsNone(profile()['stored_jobs'])
   jobs.write_text('{"jobs": "invalid"}');self.assertEqual(profile()['status'],'unavailable');self.assertIsNone(profile()['stored_jobs'])
 
 if __name__=='__main__':unittest.main()
