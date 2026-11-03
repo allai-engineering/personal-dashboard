@@ -23,6 +23,17 @@ def sibling(name):
 reader, schema = sibling('cockpit_read'), sibling('cockpit')
 RELEASE_DIRECTORY=Path(__file__).resolve().parent
 RELEASE_LINK=Path('/opt/cpa-dashboard/current')
+RELEASE_GATE=Path('/run/dashboard-release.lock')
+
+
+def commit_snapshot(path,value):
+    fd=os.open(RELEASE_GATE,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    with os.fdopen(fd,'rb') as gate:
+        if not stat.S_ISREG(os.fstat(gate.fileno()).st_mode):raise ValueError('release_gate')
+        fcntl.flock(gate,fcntl.LOCK_SH)
+        if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return False
+        atomic(path,value,0o640)
+        return True
 
 
 def atomic(path, value, mode=0o600):
@@ -85,7 +96,7 @@ def publish(directory, config, now=None, court_read=fetch_court):
             value.update(tasks=[],profiles=[{'id':p,'status':'unavailable','stored_jobs':None} for p in sorted(schema.PROFILES)])
         schema.validate(value,now=now)
         if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
-        atomic(directory / 'cockpit.json', value, 0o640)
+        if not commit_snapshot(directory/'cockpit.json',value):return {'status':'stale_release'}
         return {'status': 'partial' if value['court']['status'] == 'unavailable' else 'published'}
 
 
@@ -98,7 +109,7 @@ def local_snapshot(directory, hermes_home, now):
     value.update(collected_at=now.isoformat(),tasks=local['tasks'],profiles=local['profiles'],work=local['work'])
     schema.validate(value,now=now)
     if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
-    atomic(directory/'cockpit.json',value,0o640)
+    if not commit_snapshot(directory/'cockpit.json',value):return {'status':'stale_release'}
     return {'status':'local_published'}
 
 

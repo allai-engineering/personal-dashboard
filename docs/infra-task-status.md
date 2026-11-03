@@ -4,7 +4,7 @@ Owner request, 3 November 2026: show what the infrastructure specialist actually
 
 An unavailable source suspends the existing occurrence, stage and blocker instead of requeuing the same fault. A real changed condition, recovery or recurrence remains a distinct event. The native specialist writes its checked result to ops' canonical checkpoint; later owner evidence takes precedence.
 
-Refresh only local task/execution metadata at30second intervals through the existing publisher timer. Keep the15minute gate for external source reads. Court/event observations retain their own timestamps. A publisher from an inactive release cannot write.
+Refresh only local task/execution metadata at30second intervals through the existing publisher timer. Keep the15minute gate for external source reads. Court/event observations retain their own timestamps. A publisher from an inactive release cannot write. Snapshot commit and every UI release switch/rollback share a small root-owned coordination lock, provisioned by tmpfiles at boot; the lock contains no data.
 
 Show stage and technical blocker even when its last-known observation is stale, explicitly marking current state unconfirmed. Never infer running or recovery, or request owner action, from stale metadata. Execution state is a sampled journal observation; process completion is not incident resolution.
 

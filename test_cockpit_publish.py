@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import concurrent.futures
+import threading
 from unittest.mock import patch
 
 from test_cockpit import fixture
@@ -14,6 +16,9 @@ class CockpitPublisherTests(unittest.TestCase):
     def setUp(self):
         guard=patch.object(cockpit_publish,'RELEASE_LINK',cockpit_publish.RELEASE_DIRECTORY)
         guard.start();self.addCleanup(guard.stop)
+        temp=tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup)
+        gate=Path(temp.name)/'release.lock';gate.touch()
+        mock=patch.object(cockpit_publish,'RELEASE_GATE',gate);mock.start();self.addCleanup(mock.stop)
     def test_local_tick_observes_completed_run_without_another_external_read(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);now=dt.datetime.now(dt.timezone.utc);config={'hermes_home':str(root/'hermes')}
@@ -43,6 +48,19 @@ class CockpitPublisherTests(unittest.TestCase):
             with patch.object(cockpit_publish,'RELEASE_LINK',link):
                 result=cockpit_publish.publish(root,{'hermes_home':str(root/'hermes')},now=now,court_read=external)
             self.assertEqual(result['status'],'stale_release');self.assertEqual(json.loads(path.read_text()),before)
+    def test_release_switch_waits_for_atomic_snapshot_commit(self):
+        from deployment import ui_release
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve();link=root/'current';link.symlink_to(cockpit_publish.RELEASE_DIRECTORY)
+            entered=threading.Event();finish=threading.Event();atomic=cockpit_publish.atomic
+            def blocked(*args):
+                entered.set();self.assertTrue(finish.wait(3));return atomic(*args)
+            with patch.object(cockpit_publish,'RELEASE_LINK',link),patch.object(ui_release,'CURRENT',link),patch.object(ui_release,'RELEASE_GATE',cockpit_publish.RELEASE_GATE),patch.object(cockpit_publish,'atomic',side_effect=blocked),concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                committing=pool.submit(cockpit_publish.commit_snapshot,root/'cockpit.json',{'synthetic':True})
+                self.assertTrue(entered.wait(2));switching=pool.submit(ui_release.switch,root/'new')
+                self.assertFalse(switching.done());self.assertEqual(link.resolve(),cockpit_publish.RELEASE_DIRECTORY)
+                finish.set();self.assertTrue(committing.result(timeout=3));switching.result(timeout=3)
+            self.assertEqual(link.resolve(),root/'new');self.assertEqual(json.loads((root/'cockpit.json').read_text()),{'synthetic':True})
     def test_existing_tick_publishes_once_per_fifteen_minutes_and_preserves_source_time(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

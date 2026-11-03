@@ -6,7 +6,9 @@ from deployment import incident_ops as ops
 from test_cockpit import fixture
 
 class Incidents(unittest.TestCase):
- def setUp(self):self.now=dt.datetime.now(dt.timezone.utc)
+ def setUp(self):
+  self.now=dt.datetime.now(dt.timezone.utc);tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
+  gate=pathlib.Path(tmp.name)/'release.lock';gate.touch();mock=patch.object(cockpit_publish,'RELEASE_GATE',gate);mock.start();self.addCleanup(mock.stop)
  def record(self,state='open',condition='service:warning'):
   return {'record_id':'machine-node','condition_key':condition,'source_state':state,'source_at':self.now.isoformat()}
  def state(self):return ops.reconcile({},[self.record()],self.now)
