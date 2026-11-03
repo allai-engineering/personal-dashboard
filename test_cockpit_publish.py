@@ -52,13 +52,17 @@ class CockpitPublisherTests(unittest.TestCase):
         from deployment import ui_release
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp).resolve();link=root/'current';link.symlink_to(cockpit_publish.RELEASE_DIRECTORY)
-            entered=threading.Event();finish=threading.Event();atomic=cockpit_publish.atomic
+            entered=threading.Event();switch_entered=threading.Event();finish=threading.Event();atomic=cockpit_publish.atomic
+            def switching_release():
+                switch_entered.set();ui_release.switch(root/'new')
             def blocked(*args):
                 entered.set();self.assertTrue(finish.wait(3));return atomic(*args)
             with patch.object(cockpit_publish,'RELEASE_LINK',link),patch.object(ui_release,'CURRENT',link),patch.object(ui_release,'RELEASE_GATE',cockpit_publish.RELEASE_GATE),patch.object(cockpit_publish,'atomic',side_effect=blocked),concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
                 committing=pool.submit(cockpit_publish.commit_snapshot,root/'cockpit.json',{'synthetic':True})
-                self.assertTrue(entered.wait(2));switching=pool.submit(ui_release.switch,root/'new')
-                self.assertFalse(switching.done());self.assertEqual(link.resolve(),cockpit_publish.RELEASE_DIRECTORY)
+                self.assertTrue(entered.wait(2));switching=pool.submit(switching_release)
+                self.assertTrue(switch_entered.wait(2))
+                with self.assertRaises(concurrent.futures.TimeoutError):switching.result(timeout=0.1)
+                self.assertEqual(link.resolve(),cockpit_publish.RELEASE_DIRECTORY)
                 finish.set();self.assertTrue(committing.result(timeout=3));switching.result(timeout=3)
             self.assertEqual(link.resolve(),root/'new');self.assertEqual(json.loads((root/'cockpit.json').read_text()),{'synthetic':True})
     def test_existing_tick_publishes_once_per_fifteen_minutes_and_preserves_source_time(self):
