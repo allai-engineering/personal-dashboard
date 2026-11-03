@@ -141,6 +141,13 @@ test('preparation remains visible after the source becomes healthy',async({page}
  await expect(page.locator('#cockpit-decisions')).not.toContainText(m.id);
  await page.locator('#nav-machines').click();await expect(page.locator('#machine-'+m.id)).toContainText('Без замечаний на замере');
  await expect(page.locator('#machine-'+m.id)).toContainText('Подготовка исправления');
+ delete body.cockpit.work.items[0].actor;body.cockpit.work.items[0].action='inspect_disk';
+ await page.locator('#refresh').click();await expect(page.locator('#machine-'+m.id)).toContainText('Анализ занятого места');
+ await page.locator('#nav-overview').click();await expect(page.locator('#cockpit-work')).toContainText('Hermes · ops');
+ body.cockpit.work.items[0].state='waiting';body.cockpit.work.items[0].action='test_fix';body.cockpit.work.items[0].blocker='no_safe_procedure';
+ await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('ops · ожидание');
+ await expect(page.locator('#cockpit-work')).toContainText('Нужна проверенная процедура исправления');
+ await expect(page.locator('#cockpit-decisions')).not.toContainText(m.id);
 });
 
 test('technical incidents belong to Hermes and only explicit owner requests become decisions',async({page},testInfo)=>{

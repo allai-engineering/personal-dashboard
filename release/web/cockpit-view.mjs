@@ -103,11 +103,11 @@ export function incidentView(record,work,now=Date.now(),transportError=false){
 
 export function maintenanceWork(record,work,now=Date.now(),transportError=false){
  if(record.state!=='clear'||work?.status!=='ok')return null;
- const item=work.items.find(w=>w.record_id===record.id&&w.source_state==='clear'&&w.actor==='infra-dev'&&['accepted','waiting'].includes(w.state));
+ const item=work.items.find(w=>w.record_id===record.id&&w.source_state==='clear'&&['accepted','waiting'].includes(w.state));
  if(!item)return null;
  // A healthy source can coexist with ongoing preparation; this is activity, not a new fault.
  const stage=incidentView({...record,condition_key:item.condition_key},work,now,transportError);
- if(item.state==='waiting'&&!transportError&&freshAt(work.observed_at,now,1800))stage.label='infra-dev · ожидание';
+ if(item.state==='waiting'&&!transportError&&freshAt(work.observed_at,now,1800))stage.label=(item.actor||'ops')+' · ожидание';
  stage.active=item.state==='accepted'&&!transportError&&freshAt(work.observed_at,now,120)&&item.execution_liveness==='verified'&&['claimed','running'].includes(item.execution_state);
  return stage;
 }

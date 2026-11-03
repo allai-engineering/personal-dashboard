@@ -109,7 +109,7 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  delegated.push(...gaps.filter(r=>r.work.item&&r.work.lane==='hermes'));
  for(const r of view.records){
   const work=maintenanceWork(r,snapshot?.cockpit?.work,now,transportError);
-  if(work){const activity={...r,tone:'ok',owner:'Hermes · infra-dev',work,detail:'На замере без замечаний. Подготовка Hermes учитывается отдельно.'};if(work.active)delegated.unshift(activity);else delegated.push(activity);registry.set(opaque(r.id),activity);}
+  if(work){const activity={...r,tone:'ok',owner:'Hermes · '+(work.item.actor||'ops'),work,detail:'На замере без замечаний. Подготовка Hermes учитывается отдельно.'};if(work.active)delegated.unshift(activity);else delegated.push(activity);registry.set(opaque(r.id),activity);}
  }
  $('cockpit-coverage').replaceChildren(el('strong',`${decisions.length} решений для вас · ${delegated.length} задач у Hermes · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
  $('cockpit-count').textContent=expanded.length+' записей';
