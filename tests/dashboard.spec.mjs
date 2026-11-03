@@ -1,5 +1,21 @@
 import {test,expect} from '@playwright/test';
 
+test('machine aliases appear under one canonical card while unknown machines remain',async({page},testInfo)=>{
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ const body=await (await page.request.get('/api/snapshot')).json();
+ const machine=body.operations.fleet.machines[0];machine.aliases=['old-node'];
+ body.operations.fleet.machines.push({...machine,id:'unconfirmed-node',aliases:[],state:'not_enrolled',issues:[]});
+ body.operations.fleet.inventory_count=2;
+ await page.route('**/api/refresh',route=>route.fulfill({json:body}));
+ await page.locator('#refresh').click();await page.locator('#nav-machines').click();
+ await expect(page.locator('#machine-'+machine.id)).toContainText('Псевдонимы: old-node');
+ await expect(page.locator('#machine-old-node')).toHaveCount(0);
+ await expect(page.locator('#machine-unconfirmed-node')).toContainText('Диагностика не подключена');
+ await expect(page.locator('#machine-count')).toContainText('2 записей');
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ await page.screenshot({path:testInfo.outputPath('machine-aliases.png'),fullPage:true});
+});
+
 test('password gate, four pages, quotas, unknown values and compact mobile layout',async({page},testInfo)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const unwanted=[];

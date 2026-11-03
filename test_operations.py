@@ -33,6 +33,24 @@ class Tests(unittest.TestCase):
   self.assertFalse(o.fresh((self.now-dt.timedelta(hours=8)).isoformat(),self.now,25200))
   self.assertFalse(o.fresh((self.now+dt.timedelta(hours=1)).isoformat(),self.now,25200))
   self.assertFalse(o.fresh(None,self.now,25200))
+ def test_machine_aliases_are_labels_not_extra_machines(self):
+  t=self.now.isoformat()
+  inv={'schema':1,'machines':[{'id':'node-a','enabled':True,'aliases':['old-node']},{'id':'unconfirmed','enabled':False}]}
+  latest={'schema':1,'observed_at':t,'machines':[{'id':'node-a','state':'observed_ok','issues':[]},{'id':'old-node','state':'not_enrolled','issues':[{'check':'coverage','severity':'unknown'}]}]}
+  current={'schema':1,'observed_at':t,'summary':{'issues':[]}}
+  result=o.fleet(inv,latest,current,self.now)
+  self.assertEqual(result['inventory_count'],2);self.assertEqual(result['enrolled'],1)
+  self.assertEqual([m['id'] for m in result['machines']],['node-a','unconfirmed'])
+  self.assertEqual(result['machines'][0]['aliases'],['old-node'])
+  self.assertEqual(result['machines'][1]['state'],'unknown')
+ def test_alias_validation_is_bounded_and_unambiguous(self):
+  d={'schema':o.SCHEMA,'read_only':True,'collected_at':self.now.isoformat(),'balances':[o.unavailable_balance(p,'unavailable',self.now) for p in o.PROVIDERS],'fleet':self.make_fleet()}
+  d['fleet']['machines'][0]['aliases']=['old-node'];o.validate(d)
+  for names in ['old-node',None,{},[True],[''],['../private'],['x'*81],['x']*11,['main'],['missing'],['x','x']]:
+   bad=copy.deepcopy(d);bad['fleet']['machines'][0]['aliases']=names
+   with self.subTest(names=names),self.assertRaises(ValueError):o.validate(bad)
+  d['fleet']['machines'][1]['aliases']=['old-node']
+  with self.assertRaises(ValueError):o.validate(d)
  def test_protocol_rejects_extra_fields_and_unknown_as_zero(self):
   d={'schema':o.SCHEMA,'read_only':True,'collected_at':self.now.isoformat(),'balances':[o.unavailable_balance(p,'unavailable',self.now) for p in o.PROVIDERS],'fleet':self.make_fleet()}
   o.validate(d)
