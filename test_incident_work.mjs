@@ -21,3 +21,6 @@ assert.equal(rows.find(r=>r.record_id==='machine-node').source_state,'open');
 
 const staleItem={...item,state:'needs_user',blocker:'owner_approval',decision:'Подтвердить?',condition_key:'source:stale',source_state:'unknown',source_at:new Date(now-7*864e5).toISOString()};
 assert.equal(incidentView({id:record.id,state:'unknown',condition_key:'source:stale'}, {...work,items:[staleItem]},now).lane,'hermes');
+
+const dead={...item,state:"accepted",source_state:"open",execution_state:"running",execution_liveness:"not_live"};
+assert.match(incidentView(record,{...work,items:[dead]},now).label,/остановился/);
