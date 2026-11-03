@@ -137,7 +137,7 @@ def apply(payload):
         os.chown(DATA,account.pw_uid,gid);DATA.chmod(0o750)
         ui.atomic(FILES['sources'],json.dumps(sources).encode(),0o640,gid=account.pw_gid)
         ui.atomic(FILES['dashboard'],('[Service]\nExecStart=\nExecStart='+shlex.join(args)+'\n').encode(),0o644)
-        unit='[Unit]\nDescription=Read existing Court and Hermes evidence for Captain Cockpit\nAfter=network-online.target\n[Service]\nType=oneshot\nUser=hermes\nGroup=hermes\nSupplementaryGroups=cpa-dashboard\nExecStart=/usr/bin/python3 -I -B '+str(new/'cockpit_publish.py')+'\nUMask=0077\nTimeoutStartSec=55\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=full\nProtectHome=true\nInaccessiblePaths=-/etc/cpa-dashboard/http-auth.json -/var/lib/cliproxyapi\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n'
+        unit='[Unit]\nDescription=Read existing Court and Hermes evidence for Captain Cockpit\nAfter=network-online.target\n[Service]\nType=oneshot\nUser=hermes\nGroup=hermes\nSupplementaryGroups=cpa-dashboard\nExecStart=/usr/bin/python3 -I -B '+str(ui.CURRENT/'cockpit_publish.py')+'\nUMask=0077\nTimeoutStartSec=55\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=full\nProtectHome=true\nInaccessiblePaths=-/etc/cpa-dashboard/http-auth.json -/var/lib/cliproxyapi\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n'
         ui.atomic(FILES['publisher'],unit.encode(),0o644)
         ui.atomic(FILES['timer'],b'[Unit]\nDescription=Refresh local task status; external sources keep their 15-minute gate\n[Timer]\nOnBootSec=30s\nOnUnitInactiveSec=30s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n',0o644)
         command(['systemd-analyze','verify',str(FILES['publisher']),str(FILES['timer'])])

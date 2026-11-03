@@ -31,6 +31,10 @@ class CockpitReleaseTests(unittest.TestCase):
             payload={'sha':'a'*40,'expected_current':str(old),'expected_policy_sha256':m.ui.sha(policy_path),
                      'sources':{'hermes_home':'/synthetic/hermes','court_alias':'court','court_root':'/synthetic/court'}}
             def command(args,**kwargs):
+                if args[:3]==['systemctl','start','dashboard-cockpit.service']:
+                    unit=paths['publisher'].read_text()
+                    self.assertIn('ExecStart=/usr/bin/python3 -I -B '+str(current/'cockpit_publish.py')+'\n',unit)
+                    self.assertTrue((current/'cockpit_publish.py').is_file())
                 if shutdown_error and args[:2]==['systemctl','disable']:
                     raise ValueError('shutdown_failed')
                 if args[:3]==['systemctl','show','cpa-dashboard.service']:
