@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {incidentView} from './release/web/cockpit-view.mjs';
 const now=Date.now(),stamp=new Date(now).toISOString();
 const record={id:'machine-node',state:'open',condition_key:'service:warning'};
-const item={record_id:record.id,condition_key:record.condition_key,state:'queued',source_state:'open',action:'diagnose',blocker:'none',decision:null,updated_at:stamp,execution_state:'unknown',execution_liveness:'unverified'};
+const item={record_id:record.id,condition_key:record.condition_key,state:'queued',source_state:'open',source_at:stamp,action:'diagnose',blocker:'none',decision:null,updated_at:stamp,execution_state:'unknown',execution_liveness:'unverified'};
 const work={status:'ok',observed_at:stamp,items:[item]};
 assert.match(incidentView(record,work,now).label,/ждёт разбора/);
 item.state='accepted';item.execution_state='running';item.execution_liveness='verified';assert.match(incidentView(record,work,now).label,/процесс подтверждён/);
