@@ -29,7 +29,7 @@ def validate(value):
   if 'preparation' in w:
    p=w['preparation']
    if not isinstance(p,dict) or set(p)!={'status','tested_at','checks','current_occurrence'} or p['status'] not in ('passed_conditional','failed') or type(p['checks']) is not int or not 1<=p['checks']<=1000 or type(p['current_occurrence']) is not bool:raise ValueError('incident_preparation')
-   if stamp(p['tested_at'])>observed+dt.timedelta(seconds=60):raise ValueError('incident_preparation_future')
+   if stamp(p['tested_at'])>observed:raise ValueError('incident_preparation_future')
   text(w['record_id'],240);text(w['condition_key'],500)
   if w['record_id'] in seen or not re.fullmatch('[a-f0-9]{64}',w['fingerprint']):raise ValueError('incident_identity')
   seen.add(w['record_id'])

@@ -27,7 +27,7 @@ class InfraProgress(unittest.TestCase):
  def test_unverified_or_malformed_preparation_does_not_hide_current_progress(self):
   target=self.path.parent.parent/'infra-results.json'
   report={'record_id':self.raw['record_id'],'fingerprint':self.raw['fingerprint'],'status':'passed_conditional','tested_at':self.now.isoformat(),'checks':17}
-  for changes in ({'status':'production_ready'},{'checks':True},{'checks':0},{'tested_at':(self.now+dt.timedelta(hours=1)).isoformat()}):
+  for changes in ({'status':'production_ready'},{'checks':True},{'checks':0},{'tested_at':(self.now+dt.timedelta(seconds=30)).isoformat()}):
    target.write_text(json.dumps({'schema':1,'items':[{**report,**changes}]}))
    self.assertEqual(cockpit_read.preparation_overlay(cockpit_read.read(target),self.item,incident_schema,self.now.isoformat()),self.item)
   target.write_text(json.dumps({'schema':1,'items':[report,report]}))
