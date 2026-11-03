@@ -89,12 +89,23 @@ def issue(raw, observed_at, category):
     return {'code': code, 'text': message, 'severity': severity, 'category': category,
             'observed_at': observed_at, 'ttl_seconds': 25200 if category == 'host' else 900}
 
+def validate_aliases(machines):
+    used = {m['id'] for m in machines}
+    for m in machines:
+        names = m.get('aliases', [])
+        if not isinstance(names, list) or len(names) > 10: raise ValueError('machine_aliases')
+        for name in names:
+            if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,80}', name) or name in used:
+                raise ValueError('machine_aliases')
+            used.add(name)
+
 def fleet(inventory, latest, current, now):
     if inventory.get('schema') != 1 or latest.get('schema') != 1 or current.get('schema') != 1:
         raise ValueError('fleet_schema')
     entries, probes = inventory['machines'], latest['machines']
     if not isinstance(entries, list) or not isinstance(probes, list) or len(entries) > 200 or len(probes) > 200:
         raise ValueError('fleet_size')
+    validate_aliases(entries)
     lookup = {m['id']: m for m in probes}
     if len(lookup) != len(probes):
         raise ValueError('duplicate_machine')
@@ -131,6 +142,7 @@ def fleet(inventory, latest, current, now):
         except ValueError: pass
         records.append({'id': mid, 'kind': entry.get('kind') if entry.get('kind') in KINDS else 'unknown',
                         'state': state, 'observed_at': observed, 'metrics': metrics, 'issues': list(unique.values())})
+        if entry.get('aliases'): records[-1]['aliases'] = list(entry['aliases'])
     lookup = {m['id']: m for m in records}
     if len(lookup) != len(records): raise ValueError('duplicate_inventory')
     for raw in current.get('summary', {}).get('issues', []):
@@ -173,7 +185,7 @@ def validate(value):
         if f[k] is not None: number(f[k],0,200)
     ids = set()
     for m in f['machines']:
-        exact(m, 'id kind state observed_at metrics issues')
+        exact(m, 'id kind state observed_at metrics issues' + (' aliases' if 'aliases' in m else ''))
         if not re.fullmatch(r'[A-Za-z0-9_.-]{1,80}',m['id']) or m['id'] in ids: raise ValueError('machine')
         ids.add(m['id'])
         if m['kind'] not in KINDS or m['state'] not in ('observed_ok','degraded','unreachable','not_enrolled','unknown'): raise ValueError('state')
@@ -187,4 +199,5 @@ def validate(value):
             if i['code'] not in ('disk','service','backup','application','connection','coverage','other') or i['severity'] not in SEVERITIES or i['category'] not in ('host','backup','monitor'): raise ValueError('issue')
             if i['ttl_seconds'] != (25200 if i['category']=='host' else 900): raise ValueError('ttl')
             if i['observed_at'] is not None: timestamp(i['observed_at'])
+    validate_aliases(f['machines'])
     return value

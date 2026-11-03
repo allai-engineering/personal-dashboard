@@ -56,6 +56,7 @@ function balanceCard(b,now,open){
 function machineCard(m,now,open){
  const card=el('article',null,'account resource-card '+m.tone);card.id='machine-'+m.id;
  const head=el('div',null,'service-top');head.append(el('h2',m.id==='applications'?'Приложения и бэкапы':m.id),badge(m.tone));card.append(head);
+ if(m.aliases?.length)card.append(el('p','Псевдонимы: '+m.aliases.join(', '),'muted small'));
  card.append(el('p',m.message,'resource-message'));
  const action=machineAction(m);if(action)card.append(el('p','Что сделать: '+action,'small'));
  const when=m.active.find(i=>i.severity!=='unknown')?.observed_at||m.observed_at;
