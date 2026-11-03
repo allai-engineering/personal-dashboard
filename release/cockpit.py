@@ -24,7 +24,11 @@ def ident(value):
 
 
 def validate(value, now=None):
-    exact(value, 'schema collected_at read_only court tasks profiles events')
+    exact(value, 'schema collected_at read_only court tasks profiles events' + (' work' if 'work' in value else ''))
+    if 'work' in value:
+        spec=importlib.util.spec_from_file_location('cockpit_incidents',Path(__file__).with_name('incident_schema.py'))
+        contract=importlib.util.module_from_spec(spec);spec.loader.exec_module(contract)
+        contract.validate(value['work'])
     if value['schema'] != SCHEMA or value['read_only'] is not True:
         raise ValueError('cockpit_schema')
     collected = timestamp(value['collected_at'])

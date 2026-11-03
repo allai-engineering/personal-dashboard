@@ -104,6 +104,31 @@ def liveness(row):
         return 'unverified'
 
 
+def incident_work(root, now):
+    unavailable={'status':'unavailable','observed_at':now,'items':[]}
+    try:
+        raw=read(root/'profiles/ops/checkpoints/dashboard-incidents.json',524288)
+        if not isinstance(raw,dict) or raw.get('schema')!=1 or not isinstance(raw.get('items'),list) or len(raw['items'])>200:return unavailable
+        rows={}
+        with closing(sqlite3.connect('file:'+quote(str(root/'profiles/ops/cron/executions.db'),safe='/')+'?mode=ro',uri=True,timeout=3)) as db:
+            db.row_factory=sqlite3.Row;db.execute('PRAGMA query_only=ON')
+            ids=[w.get('execution_id') for w in raw['items'] if isinstance(w,dict) and w.get('execution_id')]
+            if ids:rows={r['id']:r for r in db.execute('SELECT id,status,pid,process_started_at,handoff_pending FROM executions WHERE id IN ('+','.join('?' for _ in ids)+')',ids)}
+        items=[]
+        for w in raw['items']:
+            execution=w.get('execution_id');row=rows.get(execution)
+            item={k:v for k,v in w.items() if k!='execution_id'}
+            item.update(execution_key=hashlib.sha256(('ops:'+execution).encode()).hexdigest()[:24] if execution else None,
+                execution_state=row['status'] if row and row['status'] in ('claimed','running','completed','failed') else 'unknown',
+                execution_liveness=liveness(row) if row else 'unverified')
+            items.append(item)
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('reader_incident_schema',Path(__file__).with_name('incident_schema.py'))
+        contract=importlib.util.module_from_spec(spec);spec.loader.exec_module(contract)
+        return contract.validate({'status':'ok','observed_at':now,'items':items})
+    except (OSError,sqlite3.Error,ValueError,TypeError,KeyError,AttributeError,RecursionError):return unavailable
+
+
 def hermes(root):
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     tasks, profiles = [], []
@@ -160,7 +185,7 @@ def hermes(root):
         for profile in profiles:
             if profile['status'] == 'ok':
                 profile['status'] = 'partial'
-    return {'tasks': tasks[:100], 'profiles': profiles, 'collected_at': now}
+    return {'tasks': tasks[:100], 'profiles': profiles, 'collected_at': now, 'work':incident_work(root,now)}
 
 
 def dashboard(root):

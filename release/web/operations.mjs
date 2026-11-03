@@ -1,5 +1,6 @@
+import {incidentView} from './cockpit-view.mjs';
 import {integrationRows} from './integrations-view.mjs';
-import {sortedBalances,sortedMachines,freshAt} from './operations-view.mjs';
+import {sortedBalances,sortedMachines,freshAt,machineCondition} from './operations-view.mjs';
 import {relativeTime,dateLabel} from './account-view.mjs';
 const $=id=>document.getElementById(id), el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const amount=(n,unit)=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:unit==='credits'?0:2}).format(n)+(unit==='credits'?' кр.':' $');
@@ -61,7 +62,7 @@ function balanceCard(b,now,open){
  else d.append(el('p',b.unit==='credits'?'Кредиты Kie, не доллары. Предупреждение ниже 5 000 кр.; красный ниже 2 000 кр.':'Остаток аккаунта OpenRouter, не лимит отдельного ключа. Предупреждение ниже $25; красный ниже $10.','muted small'));
  return card;
 }
-function machineCard(m,now,open,transportError){
+function machineCard(m,now,open,transportError,work){
  const card=el('article',null,'account resource-card '+m.tone);card.id='machine-'+m.id;
  const head=el('div',null,'service-top');head.append(el('h2',m.id==='applications'?'Приложения и бэкапы':m.id),badge(m.tone));card.append(head);
  if(m.aliases?.length)card.append(el('p','Псевдонимы: '+m.aliases.join(', '),'muted small'));
@@ -72,7 +73,13 @@ function machineCard(m,now,open,transportError){
   card.append(el('p',`Батарея: ${battery.fresh?'замер':'проверка'} ${relativeTime(battery.at,now)}`,'muted small'));
  }
  card.append(el('p',m.message,'resource-message'));
- const action=machineAction(m);if(action)card.append(el('p','Что сделать: '+action,'small'));
+ if(m.tone!=='ok'){
+  const stage=incidentView({id:'machine-'+m.id,condition_key:machineCondition(m),state:['critical','warning'].includes(m.tone)?'open':'unknown'},work,now,transportError);
+  card.append(el('p','Hermes: '+stage.label,'small'));
+  if(stage.action)card.append(el('p','Последний этап: '+stage.action,'small'));
+  if(stage.blocker)card.append(el('p',stage.blocker,'small'));
+  if(stage.lane==='owner')card.append(el('p','Нужно от вас: '+stage.item.decision,'small'));
+ }
  const when=m.active.find(i=>i.severity!=='unknown')?.observed_at||m.observed_at;
  card.append(el('p',`Замер ${relativeTime(when,now)}`,'muted small'));
  const d=disclosure(card,'machine-'+m.id,open);detail(d,'Тип',kinds[m.kind]);detail(d,'Проверка машины',dateLabel(m.observed_at));
@@ -107,7 +114,7 @@ export function renderOperations(snapshot,transportError,now){
  const ops=snapshot?.operations,balances=sortedBalances(ops,now,transportError),machines=sortedMachines(ops,now,transportError);
  const open=new Set([...document.querySelectorAll('details[data-operation][open]')].map(n=>n.dataset.operation));
  const balancesRoot=$('balances');balancesRoot.replaceChildren(...balances.map(b=>balanceCard(b,now,open)));
- const machineRoot=$('machines');machineRoot.replaceChildren(...machines.map(m=>machineCard(m,now,open,transportError)));
+ const machineRoot=$('machines');machineRoot.replaceChildren(...machines.map(m=>machineCard(m,now,open,transportError,snapshot?.cockpit?.work)));
  const okay=!transportError&&freshAt(ops?.collected_at,now,1800);
  $('operations-notice').hidden=okay;$('operations-notice').textContent='Нет свежего снимка машин и балансов. Числа не считаются текущими.';
  $('source-status').textContent=okay?'Источники и обновление':'Есть пробелы в данных · Подробнее';
