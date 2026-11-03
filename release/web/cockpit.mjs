@@ -1,4 +1,4 @@
-import {overview,reconcile,compact,opaque,incidentView} from './cockpit-view.mjs';
+import {overview,reconcile,compact,opaque,incidentView,maintenanceWork} from './cockpit-view.mjs';
 import {dateLabel,relativeTime} from './account-view.mjs';
 import {machineAction} from './operations.mjs';
 const $=id=>document.getElementById(id);
@@ -107,7 +107,11 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  for(const r of gaps){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
  for(const r of gaps.filter(r=>r.work.lane==='owner')){decisions.push(r);expanded.push(r);}
  delegated.push(...gaps.filter(r=>r.work.item&&r.work.lane==='hermes'));
- $('cockpit-coverage').replaceChildren(el('strong',`${decisions.length} решений для вас · ${delegated.length} проблем у Hermes · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
+ for(const r of view.records){
+  const work=maintenanceWork(r,snapshot?.cockpit?.work,now,transportError);
+  if(work){const activity={...r,tone:'ok',owner:'Hermes · infra-dev',work,detail:'На замере без замечаний. Подготовка Hermes учитывается отдельно.'};if(work.active)delegated.unshift(activity);else delegated.push(activity);registry.set(opaque(r.id),activity);}
+ }
+ $('cockpit-coverage').replaceChildren(el('strong',`${decisions.length} решений для вас · ${delegated.length} задач у Hermes · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
  $('cockpit-count').textContent=expanded.length+' записей';
  $('cockpit-decisions').replaceChildren(...expanded.map(r=>row(r,now)));
  if(!expanded.length)$('cockpit-decisions').append(el('p',decisions.length?'Остальное просмотрено и остаётся нерешённым ниже.':'Подтверждённых запросов к вам нет. Технические проблемы — в очереди Hermes ниже.','cockpit-empty'));
@@ -120,8 +124,8 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
   registry.set(opaque(record.id),record);return row(record,now);
  });
  $('cockpit-work').replaceChildren(...delegated.slice(0,6).map(r=>row(r,now,{scope:'work'})));
- if(delegated.length>6){const more=el('details',null,'cockpit-fold');more.append(el('summary','Ещё проблем у Hermes: '+(delegated.length-6)),...delegated.slice(6).map(r=>row(r,now,{scope:'work'})));$('cockpit-work').append(more);}
- $('cockpit-work-count').textContent=delegated.length+' проблем';
+ if(delegated.length>6){const more=el('details',null,'cockpit-fold');more.append(el('summary','Ещё задач у Hermes: '+(delegated.length-6)),...delegated.slice(6).map(r=>row(r,now,{scope:'work'})));$('cockpit-work').append(more);}
+ $('cockpit-work-count').textContent=delegated.length+' задач';
  if(!delegated.length)$('cockpit-work').append(el('p','Нерешённых проблем в очереди не видно. Полнота данных указана отдельно.','cockpit-empty'));
  $('hermes-incidents').replaceChildren(...delegated.map(r=>row(r,now,{scope:'hermes-work'})));
  $('cockpit-events').replaceChildren(...events.slice(0,3));

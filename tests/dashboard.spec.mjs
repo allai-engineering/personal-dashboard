@@ -130,6 +130,19 @@ test('changed, missing and recovered observations do not confuse seen with resol
  const ids=await page.locator('[id]').evaluateAll(nodes=>nodes.map(n=>n.id));expect(new Set(ids).size).toBe(ids.length);
 });
 
+test('preparation remains visible after the source becomes healthy',async({page})=>{
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ const body=await(await page.request.get('/api/snapshot')).json(),stamp=new Date().toISOString(),m=body.operations.fleet.machines[0];
+ m.state='observed_ok';m.issues=[];m.observed_at=stamp;
+ body.cockpit.work={status:'ok',observed_at:stamp,items:[{record_id:'machine-'+m.id,condition_key:'disk:warning',fingerprint:'b'.repeat(64),source_state:'clear',source_at:stamp,queued_at:stamp,updated_at:stamp,state:'accepted',action:'prepare_fix',blocker:'none',decision:null,task_ref:null,execution_key:'b'.repeat(24),execution_state:'running',execution_liveness:'verified',actor:'infra-dev'}]};
+ await page.route('**/api/refresh',r=>r.fulfill({json:body}));await page.locator('#refresh').click();
+ await expect(page.locator('#cockpit-work')).toContainText(m.id);await expect(page.locator('#cockpit-work')).toContainText('Подготовка исправления');
+ await expect(page.locator('#cockpit-work').getByRole('heading',{name:m.id,exact:true})).toBeVisible();
+ await expect(page.locator('#cockpit-decisions')).not.toContainText(m.id);
+ await page.locator('#nav-machines').click();await expect(page.locator('#machine-'+m.id)).toContainText('Без замечаний на замере');
+ await expect(page.locator('#machine-'+m.id)).toContainText('Подготовка исправления');
+});
+
 test('technical incidents belong to Hermes and only explicit owner requests become decisions',async({page},testInfo)=>{
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
  let body=await(await page.request.get('/api/snapshot')).json();const stamp=new Date().toISOString();

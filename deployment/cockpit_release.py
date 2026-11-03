@@ -21,6 +21,7 @@ DATA=Path('/var/lib/cpa-dashboard/cockpit');STATE=Path('/var/lib/dashboard-ui/co
 FILES={'sources':Path('/etc/cpa-dashboard/cockpit-sources.json'),
        'dashboard':Path('/etc/systemd/system/cpa-dashboard.service.d/30-cockpit.conf'),
        'publisher':Path('/etc/systemd/system/dashboard-cockpit.service'),
+       'launcher':Path('/usr/local/libexec/dashboard-cockpit-launch'),
        'timer':Path('/etc/systemd/system/dashboard-cockpit.timer'),
        'latest':Path('/var/lib/dashboard-ui/latest.json')}
 
@@ -100,7 +101,7 @@ def apply(payload):
     ui.verify_current(old,policy);files,run=source(payload['sha'])
     for name in ui.PROTECTED_WEB:
         if files.get('release/web/'+name)!=(old/'web'/name).read_bytes():ui.fail('protected_view_changed')
-    required={'release/server.py','release/operations.py','release/integrations.py','release/cockpit.py','release/cockpit_read.py','release/cockpit_publish.py','release/web/index.html'}
+    required={'release/server.py','release/operations.py','release/integrations.py','release/cockpit.py','release/cockpit_read.py','release/cockpit_publish.py','release/web/index.html','deployment/cockpit_launch.py'}
     if not required.issubset(files):ui.fail('missing_core_source')
     new=old.parent/('cockpit-'+payload['sha'])
     if new.exists():ui.fail('release_exists')
@@ -137,7 +138,8 @@ def apply(payload):
         os.chown(DATA,account.pw_uid,gid);DATA.chmod(0o750)
         ui.atomic(FILES['sources'],json.dumps(sources).encode(),0o640,gid=account.pw_gid)
         ui.atomic(FILES['dashboard'],('[Service]\nExecStart=\nExecStart='+shlex.join(args)+'\n').encode(),0o644)
-        unit='[Unit]\nDescription=Read existing Court and Hermes evidence for Captain Cockpit\nAfter=network-online.target\n[Service]\nType=oneshot\nUser=hermes\nGroup=hermes\nSupplementaryGroups=cpa-dashboard\nExecStart=/usr/bin/python3 -I -B '+str(new/'cockpit_publish.py')+'\nUMask=0077\nTimeoutStartSec=55\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=full\nProtectHome=true\nInaccessiblePaths=-/etc/cpa-dashboard/http-auth.json -/var/lib/cliproxyapi\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n'
+        unit='[Unit]\nDescription=Read existing Court and Hermes evidence for Captain Cockpit\nAfter=network-online.target\n[Service]\nType=oneshot\nUser=hermes\nGroup=hermes\nSupplementaryGroups=cpa-dashboard\nExecStart=/usr/bin/python3 -I -B '+str(FILES['launcher'])+'\nUMask=0077\nTimeoutStartSec=55\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=full\nProtectHome=true\nInaccessiblePaths=-/etc/cpa-dashboard/http-auth.json -/var/lib/cliproxyapi\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n'
+        ui.atomic(FILES['launcher'],files['deployment/cockpit_launch.py'],0o644)
         ui.atomic(FILES['publisher'],unit.encode(),0o644)
         ui.atomic(FILES['timer'],b'[Unit]\nDescription=Refresh local task status; external sources keep their 15-minute gate\n[Timer]\nOnBootSec=30s\nOnUnitInactiveSec=30s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n',0o644)
         command(['systemd-analyze','verify',str(FILES['publisher']),str(FILES['timer'])])

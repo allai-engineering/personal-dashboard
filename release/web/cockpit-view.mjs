@@ -100,3 +100,14 @@ export function incidentView(record,work,now=Date.now(),transportError=false){
  }
  return {lane:'hermes',label:item.source_state==='clear'?'В новом замере проблема не видна':item.state==='needs_user'?'Нужно перепроверить запрос к владельцу':item.actor==='infra-dev'?'infra-dev · остановился':'Остановился · ожидание',action,blocker,item,observedAt:work.observed_at};
 }
+
+export function maintenanceWork(record,work,now=Date.now(),transportError=false){
+ if(record.state!=='clear'||work?.status!=='ok')return null;
+ const item=work.items.find(w=>w.record_id===record.id&&w.source_state==='clear'&&w.actor==='infra-dev'&&['accepted','waiting'].includes(w.state));
+ if(!item)return null;
+ // A healthy source can coexist with ongoing preparation; this is activity, not a new fault.
+ const stage=incidentView({...record,condition_key:item.condition_key},work,now,transportError);
+ if(item.state==='waiting'&&!transportError&&freshAt(work.observed_at,now,1800))stage.label='infra-dev · ожидание';
+ stage.active=item.state==='accepted'&&!transportError&&freshAt(work.observed_at,now,120)&&item.execution_liveness==='verified'&&['claimed','running'].includes(item.execution_state);
+ return stage;
+}
