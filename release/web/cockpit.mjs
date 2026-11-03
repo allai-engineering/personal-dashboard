@@ -1,4 +1,4 @@
-import {overview,reconcile,compact,opaque} from './cockpit-view.mjs';
+import {overview,reconcile,compact,opaque,incidentView} from './cockpit-view.mjs';
 import {dateLabel,relativeTime} from './account-view.mjs';
 import {machineAction} from './operations.mjs';
 const $=id=>document.getElementById(id);
@@ -12,6 +12,7 @@ export function displayTitle(title){
  return title;
 }
 export function issueAction(record){
+ if(record.work)return record.work.lane==='owner'?record.work.item.decision:null;
  if(record.unconfirmed)return 'Сначала проверить свежие данные о проблеме.';
  if(record.recommendation)return record.recommendation;
  if(record.state==='unknown')return 'Проверить доступ к источнику и время последнего замера.';
@@ -47,9 +48,12 @@ function row(record,now,{small=false,scope='issue'}={}){
  const article=el('article',null,'cockpit-row '+(record.tone||'unknown')+(small?' is-seen':''));article.id='cockpit-row-'+opaque(record.id)+'-'+scope;
  const when=el('div',record.when|| (record.observedAt?relativeTime(record.observedAt,now):'Нет замера'),'cockpit-when');
  const body=el('div',null,'cockpit-body');
- body.append(el('span',record.badge||(record.unconfirmed?'Не решено · текущий статус неизвестен':record.tone==='critical'?'Важно · не решено':record.tone==='unknown'?'Нет подтверждения':small?'Просмотрено · не решено':'Требует внимания'),'cockpit-tag '+(record.tone||'unknown')));
+ body.append(el('span',record.badge||(record.unconfirmed?'Не решено · текущий статус неизвестен':record.work?.label|| (record.tone==='critical'?'Важно · не решено':record.tone==='unknown'?'Нет подтверждения':small?'Просмотрено · не решено':'Требует внимания')),'cockpit-tag '+(record.tone||'unknown')));
  body.append(el('h3',displayTitle(record.title)));
  if(!small){body.append(el('p',record.detail));if(record.domain)body.append(el('p',(record.owner||'Ответственный не подтверждён')+' · '+(domains[record.domain]||record.domain),'muted small'));}
+ if(record.work?.action&&!small)body.append(el('p','Последний этап: '+record.work.action,'small'));
+ if(record.work?.item&&!small)body.append(el('p','Отметка Hermes: '+relativeTime(record.work.item.updated_at,now),'muted small'));
+ if(record.work?.blocker&&!small)body.append(el('p',record.work.blocker,'small'));
  const action=issueAction(record);if(action&&!small)body.append(el('p','Что сделать: '+action,'small'));
  body.append(openLink(record));article.append(when,body);return article;
 }
@@ -76,6 +80,7 @@ function evidence(now){
  if(displayTitle(r.title)!==r.title)root.append(el('p','Название в источнике: '+r.title,'muted small'));
  if(r.unconfirmed)root.append(el('p','Ранее проблема была подтверждена. Сейчас данных для проверки её состояния нет.','notice'));
  root.append(el('p',r.detail),table([['Ответственный',r.owner||'Не подтверждён'],['Время наблюдения',r.observedAt?dateLabel(r.observedAt):'Неизвестно'],...r.evidence]));
+ if(r.work){root.append(table([['Передача',r.work.label],['Последний этап',r.work.action],['Остановка',r.work.blocker],['Отметка Hermes',r.work.item?dateLabel(r.work.item.updated_at):null],['Запуск',r.work.item?.execution_state],['Задача',r.work.item?.task_ref]]));}
  const action=issueAction(r);if(action)root.append(el('p','Что сделать: '+action));
  if(r.domain&&domains[r.domain]){const source=el('a','Открыть раздел «'+domains[r.domain]+'»','cockpit-action');source.href='#'+r.domain;root.append(source);}
  root.append(el('p','Просмотр не означает решение. Новая или изменившаяся проблема появляется снова; важная остаётся наверху. История до открытия этой вкладки не восстанавливается.','muted small'));
@@ -92,14 +97,20 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  if(cleared)saveSeen();
  active=reconcile(active,view.records,view.retired);
  registry=new Map(view.records.map(r=>[opaque(r.id),r]));for(const r of active.values())registry.set(opaque(r.id),r);
+ for(const r of active.values()){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.owner=r.work.lane==='owner'?'Вы':'Hermes · ops';}
  const seenForRows=new Map([...active.values()].map(r=>[r.id,seen.get(opaque(r.id))]));
  const ordered=[...active.values()].sort((a,b)=>Number(b.tone==='critical')-Number(a.tone==='critical')||Number(b.unconfirmed)-Number(a.unconfirmed));
- const expanded=ordered.filter(r=>!compact(r,seenForRows)),viewed=ordered.filter(r=>compact(r,seenForRows));
+ const decisions=ordered.filter(r=>r.work.lane==='owner');
+ const expanded=decisions.filter(r=>!compact(r,seenForRows)),viewed=decisions.filter(r=>compact(r,seenForRows));
+ const delegated=ordered.filter(r=>r.work.lane==='hermes');
  const gaps=view.records.filter(r=>r.state==='unknown'&&!active.has(r.id));
- $('cockpit-coverage').replaceChildren(el('strong',`${active.size} нерешённых · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
+ for(const r of gaps){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.owner=r.work.lane==='owner'?'Вы':'Hermes · ops';}
+ for(const r of gaps.filter(r=>r.work.lane==='owner')){decisions.push(r);expanded.push(r);}
+ delegated.push(...gaps.filter(r=>r.work.item&&r.work.lane==='hermes'));
+ $('cockpit-coverage').replaceChildren(el('strong',`${decisions.length} решений для вас · ${delegated.length} проблем у Hermes · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
  $('cockpit-count').textContent=expanded.length+' записей';
  $('cockpit-decisions').replaceChildren(...expanded.map(r=>row(r,now)));
- if(!expanded.length)$('cockpit-decisions').append(el('p',active.size?'Остальное просмотрено и остаётся нерешённым ниже.':'Подтверждённых нерешённых проблем в доступных данных нет. Это не подтверждение полного охвата.','cockpit-empty'));
+ if(!expanded.length)$('cockpit-decisions').append(el('p',decisions.length?'Остальное просмотрено и остаётся нерешённым ниже.':'Подтверждённых запросов к вам нет. Технические проблемы — в очереди Hermes ниже.','cockpit-empty'));
  $('cockpit-seen').hidden=!viewed.length;$('cockpit-seen-count').textContent='Просмотрено · не решено: '+viewed.length;
  $('cockpit-seen-list').replaceChildren(...viewed.map(r=>row(r,now,{small:true})));
  $('cockpit-unknown-count').textContent='Пробелы в данных: '+gaps.length;$('cockpit-unknown').hidden=!gaps.length;
@@ -108,6 +119,11 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
   const record={id:e.id,title:e.title,domain:null,observedAt:e.observedAt,tone:'unknown',badge:e.kind,when:e.dateOnly?e.at:dateLabel(e.at),detail:e.source,evidence:[['Вид даты',e.kind],['Дата',e.dateOnly?e.at+' · время не указано':dateLabel(e.at)],['Источник',e.source]],next:'Посмотреть дату'};
   registry.set(opaque(record.id),record);return row(record,now);
  });
+ $('cockpit-work').replaceChildren(...delegated.slice(0,6).map(r=>row(r,now,{scope:'work'})));
+ if(delegated.length>6){const more=el('details',null,'cockpit-fold');more.append(el('summary','Ещё проблем у Hermes: '+(delegated.length-6)),...delegated.slice(6).map(r=>row(r,now,{scope:'work'})));$('cockpit-work').append(more);}
+ $('cockpit-work-count').textContent=delegated.length+' проблем';
+ if(!delegated.length)$('cockpit-work').append(el('p','Нерешённых проблем в очереди не видно. Полнота данных указана отдельно.','cockpit-empty'));
+ $('hermes-incidents').replaceChildren(...delegated.map(r=>row(r,now,{scope:'hermes-work'})));
  $('cockpit-events').replaceChildren(...events.slice(0,3));
  if(!events.length)$('cockpit-events').append(el('p','Подтверждённых дат из доступных источников на 7 дней нет. Это не означает отсутствие сроков.','cockpit-empty'));
  if(events.length>3){const more=el('details',null,'cockpit-fold');more.append(el('summary','Ещё дат: '+(events.length-3)),...events.slice(3));$('cockpit-events').append(more);}

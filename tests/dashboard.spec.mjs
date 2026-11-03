@@ -110,7 +110,8 @@ test('changed, missing and recovered observations do not confuse seen with resol
  await expect(low()).toContainText('19%');
  account.quota.observed_at=new Date(Date.now()-48*3600e3).toISOString();
  await page.locator('#refresh').click();
- await expect(low()).toContainText('текущий статус неизвестен');
+ await expect(low()).toHaveCount(0);
+ await expect(page.locator('#cockpit-work')).toContainText('текущий статус неизвестен');
  account.quota.observed_at=new Date().toISOString();account.quota.windows[0].remaining_percent=80;
  await page.locator('#refresh').click();
  await expect(low()).toHaveCount(0);
@@ -127,4 +128,23 @@ test('changed, missing and recovered observations do not confuse seen with resol
  await expect(page.locator('#page-hermes')).toBeVisible();
  await expect.poll(()=>page.evaluate(()=>document.activeElement?.closest('#hermes-tasks')!==null)).toBe(true);
  const ids=await page.locator('[id]').evaluateAll(nodes=>nodes.map(n=>n.id));expect(new Set(ids).size).toBe(ids.length);
+});
+
+test('technical incidents belong to Hermes and only explicit owner requests become decisions',async({page},testInfo)=>{
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ let body=await(await page.request.get('/api/snapshot')).json();const stamp=new Date().toISOString();
+ const m=body.operations.fleet.machines[0];m.state='degraded';m.issues=[{code:'service',text:'Тестовая служба требует диагностики',severity:'warning',observed_at:stamp,ttl_seconds:900}];
+ const item={record_id:'machine-'+m.id,condition_key:'service:warning',fingerprint:'b'.repeat(64),source_state:'open',source_at:stamp,queued_at:stamp,updated_at:stamp,state:'queued',action:'diagnose',blocker:'none',decision:null,task_ref:null,execution_key:null,execution_state:'unknown',execution_liveness:'unverified'};
+ body.cockpit.work.items.push(item);await page.route('**/api/refresh',r=>r.fulfill({json:body}));await page.locator('#refresh').click();
+ await expect(page.locator('#cockpit-decisions')).not.toContainText(m.id);await expect(page.locator('#cockpit-work')).toContainText('Передано ops · ждёт разбора');
+ item.state='accepted';item.execution_key='b'.repeat(24);item.execution_state='running';item.execution_liveness='verified';item.action='inspect_service';
+ await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('В работе · процесс подтверждён');
+ item.execution_state='failed';item.execution_liveness='not_applicable';await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('Запуск остановился без итога по проблеме');
+ item.state='waiting';item.blocker='no_safe_procedure';await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('Нужна проверенная процедура исправления');
+ await page.locator('#nav-machines').click();await expect(page.locator('#machine-'+m.id)).toContainText('Последний этап: Диагностика служб');await expect(page.locator('#machine-'+m.id)).not.toContainText('Что сделать:');
+ await page.screenshot({path:testInfo.outputPath('incident-machine.png'),fullPage:true});await page.locator('#nav-overview').click();await expect(page.locator('#page-overview')).toBeVisible();await page.screenshot({path:testInfo.outputPath('incident-handoff.png'),fullPage:true});
+ item.state='needs_user';item.blocker='owner_approval';item.decision='Разрешить тестовую процедуру с указанным окном?';await page.locator('#refresh').click();
+ await expect(page.locator('#cockpit-decisions')).toContainText(m.id);await expect(page.locator('#cockpit-decisions')).toContainText(item.decision);
+ m.issues[0].severity='critical';await page.locator('#refresh').click();await expect(page.locator('#cockpit-decisions')).not.toContainText(m.id);await expect(page.locator('#cockpit-work')).toContainText('Передача ещё не подтверждена');
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
 });

@@ -35,3 +35,5 @@ export function machineView(m,ops,now=Date.now(),transportError=false){
 export function sortedMachines(ops,now=Date.now(),transportError=false){
  return (ops?.fleet?.machines||[]).map(m=>machineView(m,ops,now,transportError)).sort((a,b)=>a.rank-b.rank||a.id.localeCompare(b.id));
 }
+
+export const machineCondition=m=>!m.hostFresh?'source:stale':m.active.length?m.active.map(i=>i.code+':'+i.severity).sort().join('|'):'state:'+m.state;

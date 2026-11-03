@@ -21,6 +21,8 @@ def sibling(name):
 
 
 reader, schema = sibling('cockpit_read'), sibling('cockpit')
+RELEASE_DIRECTORY=Path(__file__).resolve().parent
+RELEASE_LINK=Path('/opt/cpa-dashboard/current')
 
 
 def atomic(path, value, mode=0o600):
@@ -76,13 +78,28 @@ def publish(directory, config, now=None, court_read=fetch_court):
                 'confirmed_dates_available': False, 'known_cases': None}
         try:
             hermes = reader.hermes(Path(config['hermes_home']))
-            value.update(tasks=hermes['tasks'],profiles=hermes['profiles'])
+            value.update(tasks=hermes['tasks'],profiles=hermes['profiles'],work=hermes['work'])
             schema.validate(value,now=now)
         except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
             value.update(tasks=[],profiles=[{'id':p,'status':'unavailable','stored_jobs':None} for p in sorted(schema.PROFILES)])
         schema.validate(value,now=now)
         atomic(directory / 'cockpit.json', value, 0o640)
         return {'status': 'partial' if value['court']['status'] == 'unavailable' else 'published'}
+
+
+def refresh_local(directory, hermes_home, now=None):
+    now=now or dt.datetime.now(dt.timezone.utc)
+    fd=os.open(directory/'cockpit-publish.lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
+    with os.fdopen(fd,'a') as lock:
+        fcntl.flock(lock,fcntl.LOCK_EX)
+        if RELEASE_LINK.resolve()!=RELEASE_DIRECTORY:return {'status':'stale_release'}
+        value=reader.read(directory/'cockpit.json')
+        if value is None:return {'status':'local_source_unavailable'}
+        schema.validate(value,now=now)
+        local=reader.hermes(hermes_home)
+        value.update(collected_at=now.isoformat(),tasks=local['tasks'],profiles=local['profiles'],work=local['work'])
+        schema.validate(value,now=now);atomic(directory/'cockpit.json',value,0o640)
+        return {'status':'local_published'}
 
 
 if __name__ == '__main__':

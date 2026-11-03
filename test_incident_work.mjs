@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import {incidentView} from './release/web/cockpit-view.mjs';
+const now=Date.now(),stamp=new Date(now).toISOString();
+const record={id:'machine-node',state:'open',condition_key:'service:warning'};
+const item={record_id:record.id,condition_key:record.condition_key,state:'queued',source_state:'open',source_at:stamp,action:'diagnose',blocker:'none',decision:null,updated_at:stamp,execution_state:'unknown',execution_liveness:'unverified'};
+const work={status:'ok',observed_at:stamp,items:[item]};
+assert.match(incidentView(record,work,now).label,/ждёт разбора/);
+item.state='accepted';item.execution_state='running';item.execution_liveness='verified';assert.match(incidentView(record,work,now).label,/процесс подтверждён/);
+item.execution_state='completed';assert.match(incidentView(record,work,now).label,/без итога/);
+item.state='waiting';item.blocker='no_safe_procedure';assert.equal(incidentView(record,work,now).lane,'hermes');
+item.state='needs_user';item.blocker='owner_approval';item.decision='Разрешить проверенную процедуру?';assert.equal(incidentView(record,work,now).lane,'owner');
+assert.equal(incidentView({...record,condition_key:'service:critical'},work,now).lane,'hermes');
+assert.equal(incidentView(record,work,now+1801e3).lane,'hermes');
+assert.equal(incidentView(record,work,now,true).lane,'hermes');
+item.source_state='unknown';assert.equal(incidentView(record,work,now).lane,'hermes');
+console.log('Incident delivery, liveness, blockers and owner-only decision checks passed');
+const {intake}=await import('./release/incident_intake.mjs');
+const rows=intake({accounts:[],operations:{collected_at:stamp,fleet:{status:'ok',machines:[{id:'node',state:'degraded',observed_at:stamp,issues:[{code:'service',severity:'warning',text:'Synthetic failure',observed_at:stamp,ttl_seconds:900}],metrics:{}}]},balances:[]}},now);
+assert.equal(rows.find(r=>r.record_id==='machine-node').condition_key,'service:warning');
+assert.equal(rows.find(r=>r.record_id==='machine-node').source_state,'open');
+
+const staleItem={...item,state:'needs_user',blocker:'owner_approval',decision:'Подтвердить?',condition_key:'source:stale',source_state:'unknown',source_at:new Date(now-7*864e5).toISOString()};
+assert.equal(incidentView({id:record.id,state:'unknown',condition_key:'source:stale'}, {...work,items:[staleItem]},now).lane,'hermes');
