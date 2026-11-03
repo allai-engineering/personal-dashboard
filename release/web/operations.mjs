@@ -68,7 +68,7 @@ function machineCard(m,now,open,transportError){
  const battery=m.kind==='physical_mac'?batteryView(m,now,transportError):null;
  if(battery){
   card.append(el('p',`Заряд: ${battery.charge===null?'неизвестен':battery.charge+'%'} · Здоровье: ${battery.health===null?'неизвестно':battery.health+'%'}`,'small'));
-  card.append(el('p',battery.label,'badge '+battery.tone));
+  const limit=el('p',null,'small '+(battery.tone==='unknown'?'muted':battery.tone==='warning'?'warning':''));limit.append(el('strong',battery.label));card.append(limit);
   card.append(el('p',`Батарея: ${battery.fresh?'замер':'проверка'} ${relativeTime(battery.at,now)}`,'muted small'));
  }
  card.append(el('p',m.message,'resource-message'));
