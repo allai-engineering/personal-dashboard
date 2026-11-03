@@ -24,3 +24,7 @@ assert.equal(incidentView({id:record.id,state:'unknown',condition_key:'source:st
 
 const dead={...item,state:"accepted",source_state:"open",execution_state:"running",execution_liveness:"not_live"};
 assert.match(incidentView(record,{...work,items:[dead]},now).label,/остановился/);
+const infra={...dead,actor:'infra-dev',execution_state:'running',execution_liveness:'verified',state:'accepted'};
+assert.match(incidentView(record,{...work,items:[infra]},now).label,/infra-dev · владелец на связи/);
+infra.execution_state='completed';assert.match(incidentView(record,{...work,items:[infra]},now).label,/без итога/);
+infra.state='waiting';infra.blocker='awaiting_source';assert.equal(incidentView(record,{...work,items:[infra]},now).lane,'hermes');

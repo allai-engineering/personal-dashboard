@@ -11,7 +11,7 @@ import sqlite3
 import stat
 from urllib.parse import quote
 
-PROFILES = ('default', 'ops', 'dashboard-dev', 'lawyer', 'monitor', 'research')
+PROFILES = ('default', 'ops', 'dashboard-dev', 'infra-dev', 'lawyer', 'monitor', 'research')
 
 
 def read_timed(path, limit=4 * 1024 * 1024):
@@ -104,6 +104,22 @@ def liveness(row):
         return 'unverified'
 
 
+def infra_overlay(root,raw,item,contract,now):
+    key=hashlib.sha256((raw['record_id']+'\0'+raw['fingerprint']).encode()).hexdigest()
+    phase=read(root/'profiles/ops/checkpoints/infra-handoffs'/(key+'.json'),16384)
+    if not isinstance(phase,dict):return item
+    try:
+        if phase.get('schema')!=1 or phase.get('profile')!='infra-dev' or phase.get('record_id')!=raw['record_id'] or phase.get('fingerprint')!=raw['fingerprint'] or phase.get('parent_execution_id')!=raw.get('execution_id'):return item
+        if not isinstance(phase.get('native_task_id'),str) or not re.fullmatch(r'sa-\d+-[a-f0-9]{8}',phase['native_task_id']):return item
+        fields=('execution_id','state','action','blocker','decision','task_ref','updated_at','fingerprint')
+        if phase.get('owner_snapshot')!={k:raw.get(k) for k in fields}:return item
+        if contract.stamp(phase['updated_at'])<contract.stamp(raw['updated_at']):return item
+        candidate={**item,**{k:phase[k] for k in ('state','action','blocker','decision','task_ref','updated_at')},'actor':'infra-dev'}
+        contract.validate({'status':'ok','observed_at':now,'items':[candidate]})
+        return candidate
+    except (ValueError,TypeError,KeyError):return item
+
+
 def incident_work(root, now):
     unavailable={'status':'unavailable','observed_at':now,'items':[]}
     try:
@@ -114,6 +130,9 @@ def incident_work(root, now):
             db.row_factory=sqlite3.Row;db.execute('PRAGMA query_only=ON')
             ids=[w.get('execution_id') for w in raw['items'] if isinstance(w,dict) and w.get('execution_id')]
             if ids:rows={r['id']:r for r in db.execute('SELECT id,status,pid,process_started_at,handoff_pending FROM executions WHERE id IN ('+','.join('?' for _ in ids)+')',ids)}
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('reader_incident_schema',Path(__file__).with_name('incident_schema.py'))
+        contract=importlib.util.module_from_spec(spec);spec.loader.exec_module(contract)
         items=[]
         for w in raw['items']:
             execution=w.get('execution_id');row=rows.get(execution)
@@ -121,10 +140,7 @@ def incident_work(root, now):
             item.update(execution_key=hashlib.sha256(('ops:'+execution).encode()).hexdigest()[:24] if execution else None,
                 execution_state=row['status'] if row and row['status'] in ('claimed','running','completed','failed') else 'unknown',
                 execution_liveness=liveness(row) if row else 'unverified')
-            items.append(item)
-        import importlib.util
-        spec=importlib.util.spec_from_file_location('reader_incident_schema',Path(__file__).with_name('incident_schema.py'))
-        contract=importlib.util.module_from_spec(spec);spec.loader.exec_module(contract)
+            items.append(infra_overlay(root,w,item,contract,now))
         return contract.validate({'status':'ok','observed_at':now,'items':items})
     except (OSError,sqlite3.Error,ValueError,TypeError,KeyError,AttributeError,RecursionError):return unavailable
 
@@ -134,11 +150,13 @@ def hermes(root):
     tasks, profiles = [], []
     for profile in PROFILES:
         home = root if profile == 'default' else root / 'profiles' / profile
-        job_data = read(home / 'cron/jobs.json') or {}
+        job_data = read(home / 'cron/jobs.json')
+        jobs_valid = isinstance(job_data,dict) and isinstance(job_data.get('jobs'),list) and all(isinstance(j,dict) for j in job_data['jobs'])
+        job_data = job_data if isinstance(job_data,dict) else {}
         jobs = job_data.get('jobs', []) if isinstance(job_data, dict) else []
         jobs = jobs if isinstance(jobs, list) else []
         jobs = {j['id']: j for j in jobs if isinstance(j, dict) and isinstance(j.get('id'), str)}
-        rows, status = [], 'unavailable'
+        rows, status = [], 'empty' if profile=='infra-dev' and jobs_valid and not jobs else 'unavailable'
         path = home / 'cron/executions.db'
         if path.is_file() and not path.is_symlink():
             try:
@@ -156,7 +174,7 @@ def hermes(root):
                 seen.add(key); chosen.append(row)
         if len(chosen) > 12 or len(jobs) > 12:
             status = 'partial'
-        profiles.append({'id': profile, 'status': status, 'stored_jobs': len(jobs) if job_data else None})
+        profiles.append({'id': profile, 'status': status, 'stored_jobs': len(jobs) if jobs_valid else None})
         for row in chosen[:12]:
             job = jobs.get(row['job_id'], {})
             label = ' '.join(str(job.get('name') or 'Задание Hermes').split())[:150]

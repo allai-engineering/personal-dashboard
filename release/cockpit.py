@@ -10,7 +10,7 @@ _spec.loader.exec_module(_ops)
 exact, number, text, timestamp = _ops.exact, _ops.number, _ops.text, _ops.timestamp
 
 SCHEMA = 'captain-cockpit-v1'
-PROFILES = {'default', 'ops', 'dashboard-dev', 'lawyer', 'monitor', 'research'}
+PROFILES = {'default', 'ops', 'dashboard-dev', 'infra-dev', 'lawyer', 'monitor', 'research'}
 
 
 def optional_time(value):
