@@ -22,8 +22,8 @@ def from_power(profile,limit,now):
     value['is_charging']={'TRUE':True,'FALSE':False}.get(charge.get('sppower_battery_is_charging'))
     value['cycle_count']=numeric(health.get('sppower_battery_cycle_count'),100000)
     raw=health.get('sppower_battery_health_maximum_capacity')
-    match=re.fullmatch(r'\s*(\d{1,3})\s*%\s*',raw) if isinstance(raw,str) else None
-    value['health_percent']=numeric(int(match[1])) if match else None
+    match=re.fullmatch(r'\s*(?:(\d{1,3})\s*%|%\s*(\d{1,3}))\s*',raw) if isinstance(raw,str) else None
+    value['health_percent']=numeric(int(match[1] or match[2])) if match else None
     value['health_condition']={'Good':'normal','Normal':'normal','Service Recommended':'service_recommended','Check Battery':'service_recommended'}.get(health.get('sppower_battery_health'),'unknown')
     if isinstance(limit,dict) and set(limit)=={'status','limit_percent','limit_enabled'} and limit['status'] in ('ok','unsupported','unavailable'):
         value.update(limit_status=limit['status'],limit_percent=limit['limit_percent'],limit_enabled=limit['limit_enabled'])

@@ -14,6 +14,10 @@ class Tests(unittest.TestCase):
   return b.from_power(profile,{'status':'ok','limit_percent':80,'limit_enabled':True},self.now)
  def test_native_setting_is_separate_from_charge_and_health(self):
   s=self.sample();self.assertEqual((s['charge_percent'],s['health_percent'],s['cycle_count']),(100,89,0));self.assertTrue(s['limit_enabled']);self.assertEqual(s['limit_percent'],80)
+ def test_capacity_percent_before_and_after_number(self):
+  for raw,expected in [('96 %',96),('%96',96),('0%',0),('%101',None),('%96%',None),('96',None)]:
+   profile={'SPPowerDataType':[{'sppower_battery_health_info':{'sppower_battery_health_maximum_capacity':raw}}]}
+   with self.subTest(raw=raw):self.assertEqual(b.from_power(profile,None,self.now)['health_percent'],expected)
  def test_unknown_power_fields_are_not_zero(self):
   for profile in [{},{'SPPowerDataType':[]},{'SPPowerDataType':[{'sppower_battery_charge_info':None,'sppower_battery_health_info':None}]}]:
    s=b.from_power(profile,None,self.now)
