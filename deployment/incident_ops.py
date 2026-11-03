@@ -38,7 +38,7 @@ def reconcile(previous,records,now):
 def continuation(state,evidence,now,schema):
  rows={w['record_id']:w for w in evidence.get('items',[])}
  if any(w['state']=='accepted' and w.get('execution_liveness')=='verified' and w.get('execution_state') in ('running','claimed') for w in rows.values()):return
- pending=any(w['source_state']!='clear' and (w['state']=='queued' or w['state']=='accepted' and rows.get(w['record_id'],{}).get('execution_state') in ('completed','failed')) and (now-schema.stamp(w['updated_at'])).total_seconds()>=900 for w in state['items'])
+ pending=any(w['source_state']!='clear' and (w['state']=='queued' or w['state']=='accepted' and (rows.get(w['record_id'],{}).get('execution_state') in ('completed','failed') or rows.get(w['record_id'],{}).get('execution_liveness')=='not_live')) and (now-schema.stamp(w['updated_at'])).total_seconds()>=900 for w in state['items'])
  last=state.get('last_resume_at')
  if pending and (last is None or (now-schema.stamp(last)).total_seconds()>=3600):
   state['resume_generation']=state.get('resume_generation',0)+1;state['last_resume_at']=now.isoformat()

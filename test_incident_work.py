@@ -31,6 +31,11 @@ class Incidents(unittest.TestCase):
   ops.continuation(state,evidence,later+dt.timedelta(hours=2),schema);self.assertEqual(state['resume_generation'],2)
   evidence['items'][0]['execution_state']='failed';evidence['items'][0]['execution_liveness']='not_applicable'
   ops.continuation(state,evidence,later+dt.timedelta(hours=2),schema);self.assertEqual(state['resume_generation'],3)
+ def test_proven_dead_execution_resumes_but_unverified_execution_does_not(self):
+  state=self.state();state['items'][0]['state']='accepted';later=self.now+dt.timedelta(hours=2)
+  evidence={'items':[{'record_id':'machine-node','state':'accepted','execution_state':'running','execution_liveness':'unverified'}]}
+  ops.continuation(state,evidence,later,schema);self.assertEqual(state['resume_generation'],0)
+  evidence['items'][0]['execution_liveness']='not_live';ops.continuation(state,evidence,later,schema);self.assertEqual(state['resume_generation'],1)
  def test_stale_unknown_source_cannot_request_an_owner_decision(self):
   state=self.state();state['items'][0].update(source_state='unknown',source_at=(self.now-dt.timedelta(days=7)).isoformat())
   with self.assertRaisesRegex(ValueError,'incident_evidence_stale'):ops.report(state,self.payload(state['items'][0],state='needs_user',blocker='owner_approval',decision='Подтвердить?'),'execution',self.now,schema)
