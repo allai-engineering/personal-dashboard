@@ -91,7 +91,7 @@ export function incidentView(record,work,now=Date.now(),transportError=false){
  if(!item)return {lane:'hermes',label:'Передача ещё не подтверждена',action:null,blocker:'Нет актуальной записи ops по этой проблеме',item:null};
  const action=workActions[item.action],blocker=workBlockers[item.blocker];
  if(item.state==='queued')return {lane:'hermes',label:'Передано ops · ждёт разбора',action:null,blocker:null,item};
- if(item.state==='needs_user'&&record.state!=='clear'&&!record.unconfirmed&&['login_required','payment_required','owner_approval'].includes(item.blocker)&&item.decision)return {lane:'owner',label:'Нужно ваше решение',action,blocker,item};
+ if(item.state==='needs_user'&&record.state!=='clear'&&!record.unconfirmed&&freshAt(item.source_at,now,1800)&&['login_required','payment_required','owner_approval'].includes(item.blocker)&&item.decision)return {lane:'owner',label:'Нужно ваше решение',action,blocker,item};
  if(item.state==='resolved'&&item.source_state==='clear')return {lane:'hermes',label:'Восстановление проверено',action,blocker:null,item};
  if(item.state==='accepted'){
   const live=item.execution_liveness==='verified'&&['claimed','running'].includes(item.execution_state)&&freshAt(work.observed_at,now,120);

@@ -20,6 +20,9 @@ class Incidents(unittest.TestCase):
   changed=ops.reconcile(again,[self.record(condition='service:critical')],later);self.assertEqual(changed['items'][0]['state'],'queued');self.assertIsNone(changed['items'][0]['execution_id'])
   clear=ops.reconcile(again,[self.record('clear')],later);self.assertEqual(clear['items'][0]['source_state'],'clear')
   recurrence=ops.reconcile(clear,[self.record()],later);self.assertEqual(recurrence['items'][0]['state'],'queued')
+ def test_stale_unknown_source_cannot_request_an_owner_decision(self):
+  state=self.state();state['items'][0].update(source_state='unknown',source_at=(self.now-dt.timedelta(days=7)).isoformat())
+  with self.assertRaisesRegex(ValueError,'incident_evidence_stale'):ops.report(state,self.payload(state['items'][0],state='needs_user',blocker='owner_approval',decision='Подтвердить?'),'execution',self.now,schema)
  def test_previous_occurrence_report_cannot_claim_a_recurrence(self):
   state=self.state();payload=self.payload(state['items'][0]);first=state['items'][0]['fingerprint']
   state=ops.reconcile(state,[self.record('clear')],self.now);state=ops.reconcile(state,[self.record()],self.now)

@@ -18,3 +18,6 @@ const {intake}=await import('./release/incident_intake.mjs');
 const rows=intake({accounts:[],operations:{collected_at:stamp,fleet:{status:'ok',machines:[{id:'node',state:'degraded',observed_at:stamp,issues:[{code:'service',severity:'warning',text:'Synthetic failure',observed_at:stamp,ttl_seconds:900}],metrics:{}}]},balances:[]}},now);
 assert.equal(rows.find(r=>r.record_id==='machine-node').condition_key,'service:warning');
 assert.equal(rows.find(r=>r.record_id==='machine-node').source_state,'open');
+
+const staleItem={...item,state:'needs_user',blocker:'owner_approval',decision:'Подтвердить?',condition_key:'source:stale',source_state:'unknown',source_at:new Date(now-7*864e5).toISOString()};
+assert.equal(incidentView({id:record.id,state:'unknown',condition_key:'source:stale'}, {...work,items:[staleItem]},now).lane,'hermes');

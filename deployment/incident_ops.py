@@ -1,3 +1,4 @@
+#!/usr/bin/python3 -I
 """Existing ops checkpoint/report bridge; fixed cached sources and native execution evidence."""
 import datetime as dt,fcntl,hashlib,importlib.util,json,os,pathlib,sqlite3,subprocess,sys,tempfile
 P=pathlib.Path
@@ -64,7 +65,7 @@ def report(state,payload,execution_id,now,schema):
  public.update(execution_key=hashlib.sha256(('ops:'+execution_id).encode()).hexdigest()[:24],execution_state='running',execution_liveness='verified')
  schema.validate({'status':'ok','observed_at':now.isoformat(),'items':[public]})
  if candidate['state']=='queued':raise ValueError('report_requires_result')
- if candidate['state']=='resolved' and not -60<=(now-schema.stamp(row['source_at'])).total_seconds()<1800:raise ValueError('recovery_evidence_stale')
+ if candidate['state'] in ('resolved','needs_user') and not -60<=(now-schema.stamp(row['source_at'])).total_seconds()<1800:raise ValueError('incident_evidence_stale')
  row.update(candidate);return state
 
 def main():
