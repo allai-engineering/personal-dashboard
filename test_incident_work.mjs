@@ -42,3 +42,12 @@ assert.equal(maintenanceWork(clear,{...work,items:[{...preparation,actor:undefin
 assert.equal(maintenanceWork(clear,{...work,items:[{...preparation,state:'resolved'}]},now),null);
 assert.equal(maintenanceWork(clear,{...work,items:[{...preparation,state:'needs_user',blocker:'owner_approval',decision:'Подтвердить?'}]},now),null);
 assert.match(maintenanceWork(clear,{...work,items:[preparation]},now+1801e3).label,/Последняя запись/);
+
+const {preparationLabel}=await import('./release/web/cockpit-view.mjs');
+assert.equal(preparationLabel(item),null);
+const tested={...preparation,preparation:{status:'passed_conditional',checks:17,tested_at:stamp,current_occurrence:true}};
+assert.match(preparationLabel(tested),/17 Linux-проверок пройдено · план условный/);
+assert.equal(maintenanceWork(clear,{...work,items:[tested]},now).active,true);
+assert.equal(incidentView(record,{...work,items:[{...tested,source_state:'open',state:'waiting',blocker:'awaiting_source'}]},now).blocker,'Нет свежих данных источника');
+assert.match(preparationLabel({...tested,preparation:{...tested.preparation,current_occurrence:false}}),/прошлого запуска/);
+assert.match(preparationLabel({...tested,preparation:{...tested.preparation,status:'failed'}}),/не пройдены/);

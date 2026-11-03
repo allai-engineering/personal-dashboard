@@ -1,4 +1,4 @@
-import {incidentView,maintenanceWork} from './cockpit-view.mjs';
+import {incidentView,maintenanceWork,preparationLabel} from './cockpit-view.mjs';
 import {integrationRows} from './integrations-view.mjs';
 import {sortedBalances,sortedMachines,freshAt,machineCondition} from './operations-view.mjs';
 import {relativeTime,dateLabel} from './account-view.mjs';
@@ -79,6 +79,7 @@ function machineCard(m,now,open,transportError,work){
   card.append(el('p','Hermes: '+stage.label,'small'));
   if(stage.action)card.append(el('p','Последний этап: '+stage.action,'small'));
   if(stage.blocker)card.append(el('p',stage.blocker,'small'));
+  if(preparationLabel(stage.item))card.append(el('p',preparationLabel(stage.item)+' · '+relativeTime(stage.item.preparation.tested_at,now),'small'));
   if(stage.lane==='owner')card.append(el('p','Нужно от вас: '+stage.item.decision,'small'));
  }
  const when=m.active.find(i=>i.severity!=='unknown')?.observed_at||m.observed_at;

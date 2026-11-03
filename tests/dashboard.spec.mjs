@@ -130,7 +130,7 @@ test('changed, missing and recovered observations do not confuse seen with resol
  const ids=await page.locator('[id]').evaluateAll(nodes=>nodes.map(n=>n.id));expect(new Set(ids).size).toBe(ids.length);
 });
 
-test('preparation remains visible after the source becomes healthy',async({page})=>{
+test('preparation remains visible after the source becomes healthy',async({page},testInfo)=>{
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
  const body=await(await page.request.get('/api/snapshot')).json(),stamp=new Date().toISOString(),m=body.operations.fleet.machines[0];
  m.state='observed_ok';m.issues=[];m.observed_at=stamp;
@@ -148,6 +148,15 @@ test('preparation remains visible after the source becomes healthy',async({page}
  await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('ops · ожидание');
  await expect(page.locator('#cockpit-work')).toContainText('Нужна проверенная процедура исправления');
  await expect(page.locator('#cockpit-decisions')).not.toContainText(m.id);
+ body.cockpit.work.items[0].preparation={status:'passed_conditional',tested_at:stamp,checks:17,current_occurrence:true};
+ await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('17 Linux-проверок пройдено · план условный');
+ await expect(page.locator('#cockpit-work')).toContainText('Нужна проверенная процедура исправления');
+ await page.locator('#cockpit-work summary').click();
+ await page.locator('#cockpit-work .cockpit-row').filter({hasText:m.id}).getByRole('link').click();
+ await expect(page.locator('#evidence-content')).toContainText('не подтверждает очистку');
+ await page.locator('#nav-machines').click();await expect(page.locator('#machine-'+m.id)).toContainText('17 Linux-проверок пройдено · план условный');
+ await page.screenshot({path:testInfo.outputPath('preparation-result.png'),fullPage:true});
+ body.cockpit.work.items[0].preparation.current_occurrence=false;await page.locator('#refresh').click();await expect(page.locator('#machine-'+m.id)).toContainText('План прошлого запуска');
 });
 
 test('technical incidents belong to Hermes and only explicit owner requests become decisions',async({page},testInfo)=>{
