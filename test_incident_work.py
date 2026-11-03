@@ -20,6 +20,17 @@ class Incidents(unittest.TestCase):
   changed=ops.reconcile(again,[self.record(condition='service:critical')],later);self.assertEqual(changed['items'][0]['state'],'queued');self.assertIsNone(changed['items'][0]['execution_id'])
   clear=ops.reconcile(again,[self.record('clear')],later);self.assertEqual(clear['items'][0]['source_state'],'clear')
   recurrence=ops.reconcile(clear,[self.record()],later);self.assertEqual(recurrence['items'][0]['state'],'queued')
+ def test_unfinished_work_resumes_without_a_second_owner_or_progress_feedback(self):
+  state=self.state();later=self.now+dt.timedelta(minutes=16)
+  ops.continuation(state,{'items':[]},later,schema);self.assertEqual(state['resume_generation'],1)
+  ops.continuation(state,{'items':[]},later+dt.timedelta(minutes=15),schema);self.assertEqual(state['resume_generation'],1)
+  ops.continuation(state,{'items':[]},later+dt.timedelta(hours=1),schema);self.assertEqual(state['resume_generation'],2)
+  state['items'][0]['state']='waiting';ops.continuation(state,{'items':[]},later+dt.timedelta(hours=2),schema);self.assertEqual(state['resume_generation'],2)
+  state['items'][0]['state']='accepted'
+  evidence={'items':[{'record_id':'machine-node','state':'accepted','execution_state':'running','execution_liveness':'verified'}]}
+  ops.continuation(state,evidence,later+dt.timedelta(hours=2),schema);self.assertEqual(state['resume_generation'],2)
+  evidence['items'][0]['execution_state']='failed';evidence['items'][0]['execution_liveness']='not_applicable'
+  ops.continuation(state,evidence,later+dt.timedelta(hours=2),schema);self.assertEqual(state['resume_generation'],3)
  def test_stale_unknown_source_cannot_request_an_owner_decision(self):
   state=self.state();state['items'][0].update(source_state='unknown',source_at=(self.now-dt.timedelta(days=7)).isoformat())
   with self.assertRaisesRegex(ValueError,'incident_evidence_stale'):ops.report(state,self.payload(state['items'][0],state='needs_user',blocker='owner_approval',decision='Подтвердить?'),'execution',self.now,schema)
