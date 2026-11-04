@@ -119,6 +119,7 @@ class HostedServerTests(unittest.TestCase):
         (Path(self.tmp.name) / 'battery_schema.py').write_bytes(Path(server.__file__).with_name('battery_schema.py').read_bytes())
         (Path(self.tmp.name) / 'integrations.py').write_bytes(Path(server.__file__).with_name('integrations.py').read_bytes())
         (Path(self.tmp.name) / 'mail_subscriptions.py').write_bytes(Path(server.__file__).with_name('mail_subscriptions.py').read_bytes())
+        (Path(self.tmp.name) / 'mail_secretary.py').write_bytes(Path(server.__file__).with_name('mail_secretary.py').read_bytes())
         code = '''import sys, types
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])

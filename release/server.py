@@ -30,6 +30,9 @@ _int_spec.loader.exec_module(_int)
 _mail_spec = importlib.util.spec_from_file_location('dashboard_mail', Path(__file__).resolve().with_name('mail_subscriptions.py'))
 _mail = importlib.util.module_from_spec(_mail_spec)
 _mail_spec.loader.exec_module(_mail)
+_secretary_spec = importlib.util.spec_from_file_location('dashboard_secretary', Path(__file__).resolve().with_name('mail_secretary.py'))
+_secretary = importlib.util.module_from_spec(_secretary_spec)
+_secretary_spec.loader.exec_module(_secretary)
 
 WEB = Path(__file__).resolve().parent / 'web'
 ERRORS = {'ssh_timeout', 'ssh_collection_failed', 'snapshot_size_limit', 'invalid_snapshot'}
@@ -260,6 +263,10 @@ class SnapshotFile:
             except (OSError,ValueError,TypeError,KeyError,AttributeError,OverflowError,RecursionError):
                 value['integrations'] = None
             value['cockpit'] = None
+            try:
+                value['mail_secretary'] = _secretary.validate(json.loads(read_regular(self.path.parent/'mail-secretary.json', 1048576), parse_constant=reject_json_constant, parse_float=finite_json_float))
+            except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
+                value['mail_secretary'] = None
             try:
                 value['mail_subscriptions'] = _mail.validate(json.loads(read_regular(self.path.parent/'mail-subscriptions.json', 1048576), parse_constant=reject_json_constant, parse_float=finite_json_float))
             except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):

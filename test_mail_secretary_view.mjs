@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {secretaryView} from './release/web/mail-secretary.mjs';
+const now=Date.parse('2026-11-04T10:00:00Z');
+assert.equal(secretaryView(null,now).counts,null);
+const data={checked_at:new Date(now).toISOString(),run_state:'running',cases:[{state:'waiting'}]};
+assert.equal(secretaryView(data,now).running,true);
+assert.equal(secretaryView(data,now+601e3).running,false);
+assert.equal(secretaryView(data,now,true).running,false);
+assert.match(secretaryView(data,now+601e3).notice,/мог прерваться/);
+assert.equal(secretaryView(data,now+27*3600e3).fresh,false);
+console.log('mail secretary: unknown counts and expired active-run claims passed');
