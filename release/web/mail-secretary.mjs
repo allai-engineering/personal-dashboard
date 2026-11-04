@@ -1,6 +1,7 @@
 import {relativeTime,dateLabel} from './account-view.mjs';
+const evidenceCache=new Map();
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-const states={needs_user:'Нужно ваше решение',running:'Hermes занимается',waiting:'Ждём ответа',done:'Завершено'};
+const states={needs_user:'Нужно ваше решение',running:'Hermes занимается',waiting:'Ожидание и очередь',done:'Завершено'};
 const kinds={renewal:'Продление',payment_notice:'Уведомление об оплате',invoice:'Счёт',reply_needed:'Нужен ответ',access:'Доступ',waiting_reply:'Ожидание ответа',resolved_notice:'Разбор уведомления'};
 const services={unknown:'Почтовое дело',excalidraw:'Excalidraw',neon:'Neon',github:'GitHub',google:'Google',yandex:'Яндекс',hostkey:'Hostkey',openai:'OpenAI',anthropic:'Anthropic'};
 const blockers={owner_decision:'Нужно решение владельца',current_state_unverified:'Текущее состояние сервиса не подтверждено',awaiting_reply:'Есть уведомление об ожидаемом ответе',technical_review:'Передано в очередь ops; запуск специалиста ещё не подтверждён',notice_reviewed:'Разбор уведомления завершён; состояние сервиса не проверялось'};
@@ -13,26 +14,36 @@ export function secretaryView(data,now,transportError=false){
  const counts=data?Object.fromEntries(Object.keys(states).map(s=>[s,s==='running'?(running?1:0):data.case_counts[s]])):null;
  return {fresh,running,counts,notice:!data?'Проверка ещё не опубликована. Количество дел неизвестно.':!fresh?'Проверка устарела или недоступна. Сохранённые дела остаются ниже.':running?'Идёт ограниченный разбор почты.':data.run_state==='running'?'Текущая работа не подтверждена. Последний запуск мог прерваться.':data.stop_reason==='batch_complete'?'Ограниченный пакет разобран. Полнота почтового архива не проверялась.':data.stop_reason==='source_unavailable'?'Часть источников недоступна. Очередь сохранена.':data.stop_reason==='model_unavailable'?'Разбор остановился: ответ агента не подтверждён. Очередь сохранена.':'Пакет завершён. Оставшиеся письма сохранены в очереди.'};
 }
-export function renderSecretary(data,now,transportError=false){
+export function renderSecretary(data,now,transportError=false,control=null){
  let section=document.getElementById('mail-secretary');
  if(!section){section=el('aside',undefined,'mail-secretary');section.id='mail-secretary';section.setAttribute('aria-label','Почтовый секретарь');document.getElementById('cockpit-coverage').after(section);}
+ if(section.contains(document.activeElement)&&document.activeElement.tagName==='INPUT')return;
  const open=new Set([...section.querySelectorAll('details[open]')].map(d=>d.dataset.case));
  const view=secretaryView(data,now,transportError);
+ const decisions=control?.available?control.decisions:{};
+ const rows=(data?.cases||[]).map(r=>({...r,state:effectiveState(r,decisions[r.id])}));
+ if(view.counts){if(control?.case_counts)Object.assign(view.counts,control.case_counts);else for(let i=0;i<rows.length;i++){const old=data.cases[i].state;if(old!==rows[i].state){view.counts[old]--;view.counts[rows[i].state]++;}}}
  const title=el('h2');const icon=el('img');icon.src='/assets/mail-envelope.png';icon.alt='';icon.width=18;icon.height=18;title.append(icon,document.createTextNode('Почтовый секретарь'));
  section.replaceChildren(title,el('p',view.notice,'muted small'));
+ if(data){const brief=el('div',undefined,'mail-brief');brief.append(el('strong','Ежедневная сводка'),briefCounts(view.counts.needs_user,data.pending),el('small','Проверено '+dateLabel(data.checked_at)));section.append(brief);}
+ if(!control?.available)section.append(el('p','Действия временно недоступны. Сохранённые решения не изменены.','muted small'));
+
  for(const [state,label] of Object.entries(states)){
   const group=el('section',undefined,'mail-state mail-'+state);const heading=el('h3',label);heading.append(el('span',view.counts?String(view.counts[state]):'—','mail-count'));group.append(heading);
   if(state==='running')group.append(el('p',view.running?'Активен текущий запуск':'Активная работа не подтверждена','muted small'));
-  for(const row of (data?.cases||[]).filter(r=>r.state===state)){
+  for(const row of rows.filter(r=>r.state===state)){
    const d=el('details');d.dataset.case=row.id;d.open=open.has(row.id);
    d.append(el('summary',`${services[row.service]} · ${kinds[row.kind]}`));
-   d.append(el('p',nextActions[row.next_action]|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
+   const decision=decisions[row.id];
+   if(decision)d.append(el('p',decisionLabel(decision),'mail-decision small'));
+   if(!decision||['checked','due'].includes(decision.status))d.append(el('p',nextActions[row.next_action]|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
    d.append(el('p',row.deadline?'Срок из письма: '+row.deadline:'Срок неизвестен','small'));
-   d.append(el('p',blockers[row.blocker],'small'));
+   if(!decision||decision.status==='checked')d.append(el('p',blockers[row.blocker],'small'));
    d.append(el('p','Уверенность: подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));
    d.append(el('p','Ответственный: '+({user:'Вы',ops:'Hermes · ops','mail-secretary':'Почтовый секретарь'}[row.owner]),'muted small'));
    d.append(el('p','Последняя операция: '+(row.last_operation==='handoff_queued'?'поставлено в очередь ops':'проверена опора на источник')+' · '+relativeTime(row.updated_at,now),'muted small'));
    d.append(el('p','Источник от '+dateLabel(row.observed_at)+' · '+row.sources.map(s=>s.slice(0,8)).join(', '),'muted small'));
+   d.append(caseControls(row,decision,!!control?.available));
    group.append(d);
   }
   section.append(group);
@@ -45,3 +56,47 @@ export function renderSecretary(data,now,transportError=false){
   detail.append(el('p','Входящие за ограниченный период и точечный поиск. Архивный разбор остановлен. Письма не отправляются и не изменяются.','muted small'));section.append(detail);
  }
 }
+
+export function effectiveState(row,decision){
+ const status=decision?.status;
+ return status==='resolved'?'done':status==='due'?'needs_user':['snoozed','queued','running','blocked'].includes(status)?'waiting':row.state;
+}
+export function decisionLabel(d){
+ return ({resolved:'Вы отметили дело решённым. Решение сохранено.',snoozed:'Напомнить '+d.remind_on+' по Стамбулу. До этой даты дело отложено.',due:'Наступила выбранная дата напоминания: '+d.remind_on,queued:'Разобраться: в очереди ближайшего ежедневного запуска.',running:'Запрос принят в текущий разбор.',checked:'Повторная проверка источника завершена. Результат — в карточке.',blocked:'Разбор начат, но подтверждённого результата пока нет. Запрос сохранён.'})[d.status]||'Решение сохранено.';
+}
+async function mailPost(path,value){
+ const response=await fetch('/api/mail-secretary/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
+ const result=await response.json();
+ if(!response.ok)throw new Error(path==='evidence'?'Источник сейчас недоступен. Сохранённые сведения не изменены.':result.error==='invalid_reminder'?'Выберите будущую дату не дальше одного года.':response.status===409?'Решение изменилось в другой вкладке. Обновите страницу.':response.status===401?'Войдите снова. Решение не отправлено.':'Не удалось подтвердить сохранение. Повторите попытку.');
+ return result;
+}
+function caseControls(row,decision,available){
+ const box=el('div',undefined,'mail-controls');const status=el('p','','small');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+ const evidence=el('div',undefined,'mail-evidence');const show=el('button','Показать доказательства');show.type='button';show.disabled=!available;
+ const displayProof=proof=>{evidence.replaceChildren(el('strong','Доказательства'),el('p','Письмо от '+dateLabel(proof.observed_at),'small'),el('p',proof.deadline?'Подтверждённый срок: '+proof.deadline:'Явный срок не найден','small'));
+ if(proof.excerpt)evidence.append(el('blockquote',proof.excerpt));
+ else evidence.append(el('p',proof.status==='source_changed'?'Источник изменился. Нужна повторная проверка.':'Сохранены сведения об источнике. Для проверенного фрагмента нажмите «Разобраться».','muted small'));
+ evidence.append(el('p','Подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));};
+ show.onclick=async()=>{show.disabled=true;try{const proof=await mailPost('evidence',{case_id:row.id});evidenceCache.set(row.id,{proof,at:Date.now(),version:row.updated_at});displayProof(proof);}catch(error){status.textContent=error.message;show.disabled=false;}};
+ const cached=evidenceCache.get(row.id);
+ if(cached&&cached.version===row.updated_at&&Date.now()-cached.at<300000)displayProof(cached.proof);
+ else {evidenceCache.delete(row.id);evidence.append(show);}
+ box.append(evidence);
+ const actions=el('div',undefined,'mail-actions');const investigate=el('button','Разобраться','mail-primary');const remind=el('button','Напомнить');const resolved=el('button','Уже решено');
+ for(const b of [investigate,remind,resolved]){b.type='button';b.disabled=!available;}
+ const picker=el('form',undefined,'mail-reminder');picker.hidden=true;const label=el('label','Дата напоминания (Стамбул)');const date=el('input');date.type='date';date.required=true;label.append(date);const save=el('button','Сохранить дату');save.type='submit';picker.append(label,save);
+ const today=new Date().toLocaleDateString('en-CA',{timeZone:'Europe/Istanbul'});const tomorrow=new Date(today+'T12:00:00Z');tomorrow.setUTCDate(tomorrow.getUTCDate()+1);date.min=tomorrow.toISOString().slice(0,10);date.value=date.min;
+ let pending=null;
+ const send=async(action,remind_on=null)=>{
+  if(!pending||pending.action!==action||pending.remind_on!==remind_on)pending={case_id:row.id,action,remind_on,request_id:crypto.randomUUID().replaceAll('-',''),expected:decision?.request_id||null};
+  for(const b of [investigate,remind,resolved,save])b.disabled=true;
+  status.textContent='Сохраняем…';
+  try{const updated=await mailPost('action',pending);dispatchEvent(new CustomEvent('mail-secretary-change',{detail:updated}));}
+  catch(error){status.textContent=error.message;for(const b of [investigate,remind,resolved,save])b.disabled=!available;}
+ };
+ investigate.onclick=()=>send('investigate');resolved.onclick=()=>send('resolved');remind.onclick=()=>{picker.hidden=!picker.hidden;if(!picker.hidden)date.focus();};
+ picker.onsubmit=e=>{e.preventDefault();date.blur();send('remind',date.value);};
+ actions.append(investigate,remind,resolved);box.append(actions,picker,status);return box;
+}
+
+function briefCounts(decisions,pending){const grid=el('div',undefined,'mail-brief-counts');for(const [count,label] of [[decisions,'к решению'],[pending,'писем в очереди']]){const item=el('div');item.append(el('b',String(count)),el('span',label));grid.append(item);}return grid;}

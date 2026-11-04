@@ -1,5 +1,6 @@
 """Loopback-only dashboard; one bounded collection at most once per minute."""
 import argparse
+import socket
 import base64
 import binascii
 import copy
@@ -397,6 +398,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.new_session_cookie = auth.cookie()
         if self.path in ('/api/snapshot', '/api/refresh'):
             data = self.server.snapshot_cache.get()
+            try:
+                data['mail_control'] = mail_control({'operation': 'snapshot'})
+            except (OSError, ValueError):
+                data['mail_control'] = {'available': False, 'decisions': {}}
             self.send_body(200, json.dumps(data, ensure_ascii=False, allow_nan=False).encode())
             return
         target = static_file(self.path)
@@ -408,6 +413,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self.new_session_cookie = None
         auth = getattr(self.server, 'auth', None)
+        if self.path in ('/api/mail-secretary/action', '/api/mail-secretary/evidence'):
+            self.mail_post(auth)
+            return
         if self.path != '/login' or not isinstance(auth, PasswordAuth) or not getattr(self.server, 'public_origin', None):
             self.read_only()
             return
@@ -449,10 +457,60 @@ class Handler(BaseHTTPRequestHandler):
         self.new_session_cookie = auth.cookie()
         self.send_body(303, b'')
 
+    def mail_post(self, auth):
+        if not self.origin_allowed():
+            return
+        if len(self.headers.get_all('Origin', [])) != 1:
+            self.send_body(403, b'{"error":"origin_forbidden"}')
+            return
+        if not isinstance(auth, PasswordAuth) or not auth.remembered(self.headers.get_all('Cookie', [])):
+            self.send_body(401, b'{"error":"authentication_required"}')
+            return
+        lengths = self.headers.get_all('Content-Length', [])
+        if (self.headers.get_all('Transfer-Encoding', []) or self.headers.get_all('Content-Encoding', [])
+                or len(lengths) != 1 or not re.fullmatch(r'[0-9]{1,5}', lengths[0]) or not 1 <= int(lengths[0]) <= 4096):
+            self.send_body(400, b'{"error":"invalid_action"}')
+            return
+        if self.headers.get_all('Content-Type', []) != ['application/json']:
+            self.send_body(415, b'{"error":"unsupported_type"}')
+            return
+        try:
+            raw = self.rfile.read(int(lengths[0]))
+            value = json.loads(raw, parse_constant=reject_json_constant)
+            operation = 'action' if self.path.endswith('/action') else 'evidence'
+            if not isinstance(value, dict) or 'operation' in value:
+                raise ValueError('invalid_action')
+            result = mail_control({**value, 'operation': operation})
+            error = result.get('error')
+            code = 409 if error in ('decision_conflict', 'request_conflict') else 400 if error in ('unknown_case', 'invalid_reminder', 'invalid_action', 'invalid_id', 'invalid_revision') else 503 if error else 200
+            self.send_body(code, json.dumps(result, ensure_ascii=False).encode())
+        except (OSError, ValueError, TypeError, RecursionError):
+            self.send_body(503, b'{"error":"control_unavailable"}')
+
     def read_only(self):
         self.send_body(405, b'{"error":"read_only"}')
 
     do_PUT = do_PATCH = do_DELETE = do_OPTIONS = do_HEAD = read_only
+
+
+def mail_control(value):
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(30)
+        connection.connect('/run/hermes-mail-secretary-control.sock')
+        connection.sendall(json.dumps(value, allow_nan=False).encode())
+        connection.shutdown(socket.SHUT_WR)
+        body = bytearray()
+        while len(body) <= 1048576:
+            chunk = connection.recv(65536)
+            if not chunk:
+                break
+            body.extend(chunk)
+        if len(body) > 1048576:
+            raise ValueError('control_response_size')
+        result = json.loads(body)
+        if not isinstance(result, dict):
+            raise ValueError('control_response')
+        return result
 
 
 class DashboardServer(ThreadingHTTPServer):
