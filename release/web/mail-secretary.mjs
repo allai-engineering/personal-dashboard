@@ -38,12 +38,13 @@ export function renderSecretary(data,now,transportError=false,control=null){
    const handoff=control?.handoffs?.[row.id];
    if(handoff)d.append(el('p',handoffLabel(handoff),'mail-handoff small'));
    if(decision)d.append(el('p',decisionLabel(decision),'mail-decision small'));
-   if(!decision||['checked','due'].includes(decision.status))d.append(el('p',nextActions[row.next_action]|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
+   if((!decision||['checked','due'].includes(decision.status))&&!(handoff&&row.next_action==='ops_review'))d.append(el('p',nextActions[row.next_action]|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
    d.append(el('p',row.deadline?'Срок из письма: '+row.deadline:'Срок неизвестен','small'));
    if((!decision||decision.status==='checked')&&!handoff)d.append(el('p',blockers[row.blocker],'small'));
    d.append(el('p','Уверенность: подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));
    d.append(el('p','Ответственный: '+({user:'Вы',ops:'Hermes · ops','mail-secretary':'Почтовый секретарь'}[row.owner]),'muted small'));
-   d.append(el('p','Последняя операция: '+(row.last_operation==='handoff_queued'?'поставлено в очередь ops':'проверена опора на источник')+' · '+relativeTime(row.updated_at,now),'muted small'));
+   const lastOperation=handoff?(handoff.diagnostic_completed?'выполнена ограниченная диагностика infra-dev':handoff.status==='queued'?'поставлено в очередь ops':handoff.status==='dispatching'?'запрошен запуск infra-dev':'результат infra-dev не подтверждён'):(row.last_operation==='handoff_queued'?'поставлено в очередь ops':'проверена опора на источник');
+   d.append(el('p','Последняя операция: '+lastOperation+' · '+relativeTime(handoff?.at||row.updated_at,now),'muted small'));
    d.append(el('p','Источник от '+dateLabel(row.observed_at)+' · '+row.sources.map(s=>s.slice(0,8)).join(', '),'muted small'));
    d.append(caseControls(row,decision,!!control?.available));
    group.append(d);
