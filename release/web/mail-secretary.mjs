@@ -66,7 +66,7 @@ export function effectiveState(row,decision){
 export function handoffLabel(h){
  if(h.status==='queued')return 'Техническая проверка: заявка сохранена для ops.';
  if(h.status==='dispatching')return 'Ops запросил запуск infra-dev. Результат ещё не получен.';
- if(h.reason==='owner_login'&&h.diagnostic_completed)return 'infra-dev проверил локальный почтовый канал. Для проверки доступа к внешнему сервису нужен ваш вход. Состояние аккаунта не подтверждено.';
+ if(h.reason==='diagnostic_scope_limited'&&h.diagnostic_completed)return 'infra-dev проверил локальный почтовый канал. Доступ к внешнему сервису этой проверкой не проверялся. Состояние дела не изменено.';
  if(h.reason==='diagnostic_unavailable'&&h.diagnostic_completed)return 'infra-dev выполнил диагностику: локальный почтовый канал доступен не полностью. Нужна проверка ops.';
  return 'Исполнение infra-dev не подтверждено. Повторный запуск автоматически не создан; можно снова выбрать «Разобраться».';
 }
