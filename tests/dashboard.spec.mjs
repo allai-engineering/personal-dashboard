@@ -5,7 +5,7 @@ test('mail secretary shows real case states and expires a stopped run',async({pa
  const body=await (await page.request.get('/api/snapshot')).json();const now=new Date().toISOString();
  body.mail_secretary={schema:1,checked_at:now,run_state:'partial',stop_reason:'backlog',pending:3,case_counts:{needs_user:1,waiting:0,done:0},omitted_cases:0,coverage:{ok:3,partial:1,unavailable:0,scope:'bounded_inbox_and_targeted'},cases:[{id:'a'.repeat(32),service:'excalidraw',kind:'renewal',state:'needs_user',deadline:'2026-11-09',confidence:'supported_notice',blocker:'owner_decision',next_action:'review_notice',owner:'user',observed_at:now,updated_at:now,last_operation:'evidence_verified',sources:['b'.repeat(32)]}],operations:[{action:'targeted_search',ref:'b'.repeat(32),outcome:'ok',at:now}]};
  await page.route('**/api/refresh',r=>r.fulfill({json:body}));await page.locator('#refresh').click();
- const section=page.locator('#mail-secretary');await expect(section).toContainText('Нужно ваше решение');await expect(section).toContainText('Активная работа не подтверждена');
+ const section=page.locator('#mail-secretary');await expect(section).toContainText('Другие дела');await expect(section).toContainText('Автоматическая проверка');
  await section.locator('summary').filter({hasText:'Excalidraw'}).click();await expect(section).toContainText('2026-11-09');await expect(section).toContainText('не текущее состояние сервиса');
  await section.locator('summary').filter({hasText:'Подробнее'}).click();await expect(section).toContainText('Точечный поиск по отправителю');
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
@@ -21,7 +21,7 @@ test('mail owner decisions persist on reload and evidence stays inert',async({pa
  await page.locator('#refresh').click();const section=page.locator('#mail-secretary');await section.locator('summary').filter({hasText:'Excalidraw'}).click();
  await section.getByRole('button',{name:'Показать доказательства'}).click();await expect(section.locator('blockquote')).toContainText('<script>untrusted</script>');await expect(section.locator('script')).toHaveCount(0);
  await section.getByRole('button',{name:'Разобраться',exact:true}).click();await expect(section).toContainText('в очереди ближайшего ежедневного запуска');
- await page.reload();await expect(section).toContainText('Ожидание и очередь');await section.locator('summary').filter({hasText:'Excalidraw'}).click();await expect(section).toContainText('в очереди ближайшего ежедневного запуска');
+ await page.reload();await expect(section).toContainText('Другие дела');await section.locator('summary').filter({hasText:'Excalidraw'}).click();await expect(section).toContainText('в очереди ближайшего ежедневного запуска');
  await section.getByRole('button',{name:'Напомнить',exact:true}).click();const day=new Date(Date.now()+3*86400000).toISOString().slice(0,10);await section.getByLabel('Дата напоминания (Стамбул)').fill(day);await section.getByRole('button',{name:'Сохранить дату'}).click();await expect(section).toContainText('До этой даты дело отложено');
  await section.getByRole('button',{name:'Уже решено',exact:true}).click();await expect(section).toContainText('Вы отметили дело решённым');
  await page.locator('#search').dispatchEvent('input');await expect(section).toContainText('Вы отметили дело решённым');await expect(section.locator('.mail-done .mail-count')).toHaveText('1');
@@ -228,4 +228,22 @@ test('technical incidents belong to Hermes and only explicit owner requests beco
  await expect(page.locator('#cockpit-decisions')).toContainText(m.id);await expect(page.locator('#cockpit-decisions')).toContainText(item.decision);
  m.issues[0].severity='critical';await page.locator('#refresh').click();await expect(page.locator('#cockpit-decisions')).not.toContainText(m.id);await expect(page.locator('#cockpit-work')).toContainText('Передача ещё не подтверждена');
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+});
+
+test('reply queues show cancellation and dated history without losing new reminders',async({page},testInfo)=>{
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ const body=await(await page.request.get('/api/snapshot')).json(),now=new Date().toISOString();
+ const row={service:'unknown',deadline:null,confidence:'supported_notice',blocker:'owner_decision',next_action:'review_reply',owner:'user',observed_at:now,updated_at:now,last_operation:'evidence_verified',sources:['b'.repeat(32)]};
+ const first='1'.repeat(32),second='2'.repeat(32);
+ body.mail_secretary={schema:1,checked_at:now,run_state:'partial',stop_reason:'backlog',pending:2,case_counts:{needs_user:1,waiting:1,done:0},omitted_cases:0,coverage:{ok:1,partial:1,unavailable:0,scope:'bounded_inbox_and_targeted'},cases:[{...row,id:first,kind:'reply_needed',state:'needs_user'},{...row,id:second,kind:'waiting_reply',state:'waiting'}],operations:[]};
+ body.mail_control={available:true,decisions:{[first]:{action:'remind',status:'cancelled',reason:'reply_received',request_id:'a'.repeat(32),at:now,remind_on:'2026-11-09'}},queue_counts:{reply_needed:1,waiting_reply:1,other:0,snoozed:0,done:0},queues:{[first]:'reply_needed',[second]:'waiting_reply'}};
+ await page.route(/\/api\/(snapshot|refresh)$/,r=>r.fulfill({json:body}));await page.locator('#refresh').click();
+ const section=page.locator('#mail-secretary'),card=section.locator('.mail-reply_needed details').first();await card.locator('summary').first().click();
+ await expect(section.locator('.mail-reply_needed .mail-count')).toHaveText('1');await expect(section.locator('.mail-waiting_reply .mail-count')).toHaveText('1');
+ await expect(card).toContainText('Напоминание отменено: получен ответ');
+ await card.getByText('История дела',{exact:true}).click();await card.getByRole('button',{name:'Показать историю'}).click();await expect(card.locator('.mail-timeline li')).toHaveCount(2);await expect(card).toContainText('Источник cccccccc');
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ await section.screenshot({path:testInfo.outputPath('mail-v3-history.png')});
+ body.mail_control.decisions[first]={...body.mail_control.decisions[first],status:'snoozed',request_id:'f'.repeat(32)};body.mail_control.queues[first]='snoozed';body.mail_control.queue_counts.reply_needed=0;body.mail_control.queue_counts.snoozed=1;
+ await page.locator('#refresh').click();await expect(section.locator('.mail-snoozed')).toContainText('До этой даты дело отложено');await expect(section.locator('.mail-reply_needed .mail-count')).toHaveText('0');
 });
