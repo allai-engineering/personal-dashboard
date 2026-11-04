@@ -1,5 +1,13 @@
 # Mail secretary
 
+## v3 reply workflow
+
+Owner approved reply queues, dated case history and cancellation after a verified response or resolution. Baseline ad10d6035a3d0c8e7ab2474289abbc6c40634d63. The existing authenticated socket supplies full queue counts and on-demand history through `/api/mail-secretary/history`; the POST uses the same authentication/origin/size boundary as evidence. No mail writes or new notification loop. Owner decisions remain root-journal records; cancellation is derived from a newer verified source event and cannot cancel a later reminder. A response may move a case back to “I owe a reply”; it does not automatically mean done. IMAP lacks reliable thread metadata and retains existing behavior. Daily bounded runs can leave unverified pending work, which is reported explicitly.
+
+Design: 12ui v3 candidate C, converted to responsive HTML/LayerDoc. Carry both extracted paper-airplane cutouts, blue briefing, outlined queue cards and dated timeline. Adapt its two-column secretary into the existing narrow cockpit sidebar and stack history inside the selected case on both widths; changing the surrounding cockpit or adding generated sample text is outside scope. Keep accessible native details, real controls and dynamic counts. The target token patch has no recurring deltas. Final source/target check reuses the LayerDoc without another purchase.
+
+History includes verified source transitions and durable owner actions, with explicit cancellation reasons and a 50-event display limit; older private records remain intact. Legacy events that were never recorded are labelled. A failed history request cannot change a decision. Existing evidence and all three owner actions stay available. Scope includes the protected HTTP history route and guarded installation; all previous preservation gates still apply.
+
 Owner-authorized mail integration, 4 November 2026. The existing password gate and 30-day sessions are unchanged. `/api/snapshot` reads the separately validated metadata-only `mail-secretary.json`; it never starts an agent or mail operation. The source and native profile live in private hermes-infra under operations/mail_secretary.
 
 The cockpit sidebar preserves the existing visual language and has four lanes. Actual current run metadata is separate from case states; a run older than ten minutes is unconfirmed. Missing data has unknown counts. Saved cases survive source/model failures, with dated evidence, explicit or unknown deadline, next step and blocker. Completion concerns reviewing a notice, never unverified payment or external resolution. Queued ops work is waiting, not active.

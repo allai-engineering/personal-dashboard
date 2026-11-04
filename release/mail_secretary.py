@@ -2,7 +2,7 @@
 import datetime as dt
 import re
 
-KINDS = ('renewal', 'payment_notice', 'invoice', 'reply_needed', 'access', 'waiting_reply', 'resolved_notice')
+KINDS = ('reply', 'renewal', 'payment_notice', 'invoice', 'reply_needed', 'access', 'waiting_reply', 'resolved_notice')
 BLOCKERS = ('owner_decision', 'current_state_unverified', 'awaiting_reply', 'notice_reviewed', 'technical_review')
 OPERATIONS = ('search', 'targeted_search', 'read', 'read_pdf', 'verify', 'case_recorded', 'irrelevant_verified', 'skill_read', 'tool_error', 'handoff_queued')
 SERVICES = ('unknown', 'excalidraw', 'neon', 'github', 'google', 'yandex', 'hostkey', 'openai', 'anthropic')

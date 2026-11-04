@@ -413,7 +413,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self.new_session_cookie = None
         auth = getattr(self.server, 'auth', None)
-        if self.path in ('/api/mail-secretary/action', '/api/mail-secretary/evidence'):
+        if self.path in ('/api/mail-secretary/action', '/api/mail-secretary/evidence', '/api/mail-secretary/history'):
             self.mail_post(auth)
             return
         if self.path != '/login' or not isinstance(auth, PasswordAuth) or not getattr(self.server, 'public_origin', None):
@@ -477,7 +477,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             raw = self.rfile.read(int(lengths[0]))
             value = json.loads(raw, parse_constant=reject_json_constant)
-            operation = 'action' if self.path.endswith('/action') else 'evidence'
+            operation = self.path.rsplit('/', 1)[-1]
             if not isinstance(value, dict) or 'operation' in value:
                 raise ValueError('invalid_action')
             result = mail_control({**value, 'operation': operation})

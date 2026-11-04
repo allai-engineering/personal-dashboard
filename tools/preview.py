@@ -5,6 +5,7 @@ import server
 
 mail_decisions={}
 def mail_fixture(value):
+ if value['operation']=='history':return {'events':[{'event':'incoming_request','at':'2026-11-04T08:00:00Z','ref':'b'*32},{'event':'reminder_cancelled','at':'2026-11-04T10:00:00Z','reason':'reply_received','ref':'c'*32}],'omitted':0,'legacy':False}
  if value["operation"]=="evidence":return {"observed_at":dt.datetime.now(dt.timezone.utc).isoformat(),"deadline":"2026-11-09","kind":"renewal","sources":["b"*32],"excerpt":"Synthetic renewal notice: renews 2026-11-09. <script>untrusted</script>","status":"verified_excerpt"}
  if value["operation"]=="action":
   current=mail_decisions.get(value["case_id"])

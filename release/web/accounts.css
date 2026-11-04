@@ -177,3 +177,17 @@ footer{font-size:11px;color:var(--muted);margin-top:24px;padding-top:12px;border
 .mail-actions{display:flex;flex-wrap:wrap;gap:6px}.mail-actions button{flex:1 1 auto}.mail-decision{background:#eef8f3;border-radius:6px;padding:10px;color:#145b45}
 .mail-reminder:not([hidden]){display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.mail-reminder label{font-size:12px;display:grid;gap:6px;max-width:100%}.mail-reminder input{font:inherit;padding:8px;border:1px solid #dce4ee;border-radius:6px;min-width:0;max-width:100%;background:#fff;color:#183557}
 .mail-brief-counts{display:grid;grid-template-columns:1fr 1fr;margin:12px 0;gap:12px;text-align:center}.mail-brief-counts>div{display:grid;gap:4px}.mail-brief-counts>div+div{border-left:1px solid #dce5f4}.mail-brief-counts b{font-size:23px;font-weight:600}.mail-brief-counts span{font-size:11px}
+.mail-secretary h2{padding-right:35px;background:url('/assets/cutout-3-b0a879678d7d.png') right center/38px auto no-repeat}
+.mail-brief{background:#f3f7ff url('/assets/cutout-4-13f9f9059a49.png') right 8px top 8px/42px auto no-repeat}
+.mail-brief>strong{display:block;padding-right:38px}.mail-brief-counts>div:nth-child(odd){border-left:0}
+.mail-state{margin-top:12px;padding:14px 12px;border:1px solid #e1e9f5;border-radius:9px}
+.mail-state h3{font-weight:600;color:#183557;margin:0}.mail-state .mail-count{margin-left:auto}
+.mail-reply_needed h3:before{background:#eda619;box-shadow:0 0 0 4px #eda61918}
+.mail-waiting_reply h3:before{background:#327ff5;box-shadow:0 0 0 4px #327ff518}
+.mail-done h3:before{background:#13a184;box-shadow:0 0 0 4px #13a18418}
+.mail-history{padding:12px;border:1px solid #e1e9f5;border-radius:8px;background:#fbfcff}
+.mail-history>summary{font-weight:600;color:#183557}.mail-history button{margin-top:12px}
+.mail-timeline{list-style:none;padding:0 0 0 13px;margin:16px 0 0;border-left:2px solid #e5ecf6}
+.mail-timeline li{position:relative;padding:0 0 18px 6px}.mail-timeline li:last-child{padding-bottom:0}
+.mail-timeline li:before{content:'';position:absolute;left:-19px;top:5px;width:8px;height:8px;border-radius:50%;background:#327ff5;box-shadow:0 0 0 3px #e8f0ff}
+.mail-timeline p{margin:5px 0}.mail-timeline small{font-size:10px;color:#586b80}

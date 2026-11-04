@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {caseQueue,decisionLabel,historyLabel} from './release/web/mail-secretary.mjs';
+const reply={kind:'reply_needed',state:'needs_user'};
+assert.equal(caseQueue(reply,null),'reply_needed');
+assert.equal(caseQueue({...reply,kind:'waiting_reply',state:'waiting'},null),'waiting_reply');
+assert.equal(caseQueue(reply,{status:'snoozed'}),'snoozed');
+assert.equal(caseQueue(reply,{status:'cancelled'}),'reply_needed');
+assert.equal(caseQueue(reply,{status:'resolved'}),'done');
+assert.equal(caseQueue({...reply,kind:'renewal'},null),'other');
+assert.match(decisionLabel({status:'cancelled',reason:'reply_received'}),/получен ответ/);
+assert.match(historyLabel({event:'reminder_cancelled',reason:'owner_resolved'}),/вы отметили/);
+console.log('Mail reply queues and reminder cancellation labels passed');
