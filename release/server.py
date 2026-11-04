@@ -27,6 +27,9 @@ validate_operations = _ops.validate
 _int_spec = importlib.util.spec_from_file_location('dashboard_integrations', Path(__file__).resolve().with_name('integrations.py'))
 _int = importlib.util.module_from_spec(_int_spec)
 _int_spec.loader.exec_module(_int)
+_mail_spec = importlib.util.spec_from_file_location('dashboard_mail', Path(__file__).resolve().with_name('mail_subscriptions.py'))
+_mail = importlib.util.module_from_spec(_mail_spec)
+_mail_spec.loader.exec_module(_mail)
 
 WEB = Path(__file__).resolve().parent / 'web'
 ERRORS = {'ssh_timeout', 'ssh_collection_failed', 'snapshot_size_limit', 'invalid_snapshot'}
@@ -257,6 +260,10 @@ class SnapshotFile:
             except (OSError,ValueError,TypeError,KeyError,AttributeError,OverflowError,RecursionError):
                 value['integrations'] = None
             value['cockpit'] = None
+            try:
+                value['mail_subscriptions'] = _mail.validate(json.loads(read_regular(self.path.parent/'mail-subscriptions.json', 1048576), parse_constant=reject_json_constant, parse_float=finite_json_float))
+            except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
+                value['mail_subscriptions'] = None
             if self.cockpit_path is not None:
                 try:
                     spec = importlib.util.spec_from_file_location('dashboard_cockpit', Path(__file__).resolve().with_name('cockpit.py'))

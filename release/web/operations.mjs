@@ -2,6 +2,7 @@ import {incidentView,maintenanceWork} from './cockpit-view.mjs';
 import {integrationRows} from './integrations-view.mjs';
 import {sortedBalances,sortedMachines,freshAt,machineCondition} from './operations-view.mjs';
 import {relativeTime,dateLabel} from './account-view.mjs';
+import {renderMail} from './mail-subscriptions.mjs';
 const $=id=>document.getElementById(id), el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const amount=(n,unit)=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:unit==='credits'?0:2}).format(n)+(unit==='credits'?' кр.':' $');
 const kinds={physical:'Сервер',physical_mac:'Mac',cloud_vm:'Облачная VM',virtual_machine:'VM',wsl_guest:'WSL',managed_kubernetes_node:'Узел Kubernetes',physical_router:'Роутер',services:'Приложения и бэкапы',unknown:'Тип не подтверждён'};
@@ -112,6 +113,7 @@ function integrationCard(r,now,open){
  const d=disclosure(card,'integration-'+r.key,open);detail(d,'Источник',r.source);detail(d,'Замер',dateLabel(r.observed_at));return card;
 }
 export function renderOperations(snapshot,transportError,now){
+ renderMail(snapshot?.mail_subscriptions,now,transportError);
  latest=[snapshot,transportError,now];observation(...latest);
  const ops=snapshot?.operations,balances=sortedBalances(ops,now,transportError),machines=sortedMachines(ops,now,transportError);
  const open=new Set([...document.querySelectorAll('details[data-operation][open]')].map(n=>n.dataset.operation));

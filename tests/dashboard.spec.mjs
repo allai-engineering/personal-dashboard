@@ -1,5 +1,16 @@
 import {test,expect} from '@playwright/test';
 
+test('mail subscriptions show grounded billing, source links and unknown renewal without mail text',async({page},testInfo)=>{
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ const body=await (await page.request.get('/api/snapshot')).json();const now=new Date().toISOString();
+ body.mail_subscriptions={schema:1,checked_at:now,coverage:[{mailbox:'google-test',status:'partial',checked_at:now,history_complete:false}],records:[{id:'a'.repeat(32),service:'example.test',amount:'20.00',currency:'USD',amount_kind:'last_payment',renewal_date:null,status:'observed',sources:[{mailbox:'google-test',ref:'b'.repeat(32),date:now,fields:['amount'],url:'https://mail.google.com/mail/?authuser=fixture%40example.test#all/abc123'}]}]};
+ await page.route('**/api/refresh',r=>r.fulfill({json:body}));await page.locator('#refresh').click();await page.locator('#nav-balances').click();
+ const section=page.locator('#mail-subscriptions');await expect(section).toContainText('Последний платёж: 20.00 USD');await expect(section).toContainText('Дата продления неизвестна');await expect(section).toContainText('Охват неполный');
+ await section.locator('summary').click();await expect(section.locator('a')).toHaveAttribute('href',body.mail_subscriptions.records[0].sources[0].url);
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:testInfo.outputPath('mail-subscriptions.png'),fullPage:true});
+ body.mail_subscriptions.checked_at=new Date(Date.now()-26*3600e3).toISOString();await page.locator('#refresh').click();await expect(section).toContainText('устарела');
+});
+
 test('Mac batteries show native 80 confirmation and no-connection without false zero',async({page},testInfo)=>{
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
  const body=await (await page.request.get('/api/snapshot')).json();const stamp=new Date().toISOString();
