@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {secretaryView} from './release/web/mail-secretary.mjs';
 const now=Date.parse('2026-11-04T10:00:00Z');
 assert.equal(secretaryView(null,now).counts,null);
-const data={checked_at:new Date(now).toISOString(),run_state:'running',cases:[{state:'waiting'}]};
+const data={checked_at:new Date(now).toISOString(),run_state:'running',case_counts:{needs_user:0,waiting:1,done:0},cases:[{state:'waiting'}]};
 assert.equal(secretaryView(data,now).running,true);
 assert.equal(secretaryView(data,now+601e3).running,false);
 assert.equal(secretaryView(data,now,true).running,false);

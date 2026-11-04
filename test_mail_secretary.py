@@ -9,7 +9,7 @@ from mail_secretary import validate
 
 def fixture():
     return {'schema': 1, 'checked_at': '2026-11-04T10:00:00+00:00', 'run_state': 'partial',
-        'stop_reason': 'backlog', 'pending': 3,
+        'stop_reason': 'backlog', 'pending': 3, 'case_counts': {'needs_user': 1, 'waiting': 0, 'done': 0}, 'omitted_cases': 0,
         'coverage': {'ok': 3, 'partial': 1, 'unavailable': 0, 'scope': 'bounded_inbox_and_targeted'},
         'cases': [{'id': 'a' * 32, 'service': 'unknown', 'kind': 'renewal', 'state': 'needs_user',
             'deadline': None, 'confidence': 'supported_notice', 'blocker': 'owner_decision',

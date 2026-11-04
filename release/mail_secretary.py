@@ -21,12 +21,16 @@ def validate(data):
     def opaque(value):
         if not isinstance(value, str) or not re.fullmatch('[a-f0-9]{32}', value):
             raise ValueError('mail_secretary_id')
-    fields(data, 'schema checked_at run_state stop_reason pending coverage cases operations')
+    fields(data, 'schema checked_at run_state stop_reason pending coverage cases operations case_counts omitted_cases')
     if data['schema'] != 1 or data['run_state'] not in ('running', 'idle', 'partial', 'failed'):
         raise ValueError('mail_secretary_state')
     if data['stop_reason'] not in ('running', 'batch_complete', 'backlog', 'source_unavailable', 'model_unavailable', 'budget', 'not_started'):
         raise ValueError('mail_secretary_stop')
     stamp(data['checked_at']); count(data['pending'])
+    fields(data['case_counts'], 'needs_user waiting done')
+    for number in data['case_counts'].values():
+        count(number)
+    count(data['omitted_cases'])
     fields(data['coverage'], 'ok partial unavailable scope')
     for key in ('ok', 'partial', 'unavailable'):
         count(data['coverage'][key])
@@ -47,7 +51,7 @@ def validate(data):
             raise ValueError('mail_secretary_evidence')
         if row['next_action'] not in ('review_notice', 'check_latest', 'none', 'ops_review') or row['owner'] not in ('user', 'ops', 'mail-secretary'):
             raise ValueError('mail_secretary_action')
-        if row['last_operation'] != 'evidence_verified':
+        if row['last_operation'] not in ('evidence_verified', 'handoff_queued'):
             raise ValueError('mail_secretary_operation')
         if row['deadline'] is not None and (not isinstance(row['deadline'], str) or dt.date.fromisoformat(row['deadline']).isoformat() != row['deadline']):
             raise ValueError('mail_secretary_deadline')
@@ -56,6 +60,11 @@ def validate(data):
             raise ValueError('mail_secretary_sources')
         for source in row['sources']:
             opaque(source)
+    if sum(data['case_counts'].values()) != len(data['cases']) + data['omitted_cases']:
+        raise ValueError('mail_secretary_projection_count')
+    for state, number in data['case_counts'].items():
+        if sum(row['state'] == state for row in data['cases']) > number:
+            raise ValueError('mail_secretary_projection_state')
     if not isinstance(data['operations'], list) or len(data['operations']) > 100:
         raise ValueError('mail_secretary_operations')
     for operation in data['operations']:
