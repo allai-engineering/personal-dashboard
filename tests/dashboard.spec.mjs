@@ -24,6 +24,7 @@ test('mail owner decisions persist on reload and evidence stays inert',async({pa
  await page.reload();await expect(section).toContainText('Ожидание и очередь');await section.locator('summary').filter({hasText:'Excalidraw'}).click();await expect(section).toContainText('в очереди ближайшего ежедневного запуска');
  await section.getByRole('button',{name:'Напомнить',exact:true}).click();const day=new Date(Date.now()+3*86400000).toISOString().slice(0,10);await section.getByLabel('Дата напоминания (Стамбул)').fill(day);await section.getByRole('button',{name:'Сохранить дату'}).click();await expect(section).toContainText('До этой даты дело отложено');
  await section.getByRole('button',{name:'Уже решено',exact:true}).click();await expect(section).toContainText('Вы отметили дело решённым');
+ await page.locator('#search').dispatchEvent('input');await expect(section).toContainText('Вы отметили дело решённым');await expect(section.locator('.mail-done .mail-count')).toHaveText('1');
  await page.reload();await section.locator('summary').filter({hasText:'Excalidraw'}).click();await expect(section).toContainText('Вы отметили дело решённым');
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
  await section.screenshot({path:testInfo.outputPath('mail-v2-resolved.png')});

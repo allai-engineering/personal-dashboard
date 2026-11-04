@@ -1,4 +1,5 @@
 import {relativeTime,dateLabel} from './account-view.mjs';
+const evidenceCache=new Map();
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const states={needs_user:'Нужно ваше решение',running:'Hermes занимается',waiting:'Ожидание и очередь',done:'Завершено'};
 const kinds={renewal:'Продление',payment_notice:'Уведомление об оплате',invoice:'Счёт',reply_needed:'Нужен ответ',access:'Доступ',waiting_reply:'Ожидание ответа',resolved_notice:'Разбор уведомления'};
@@ -21,7 +22,7 @@ export function renderSecretary(data,now,transportError=false,control=null){
  const view=secretaryView(data,now,transportError);
  const decisions=control?.available?control.decisions:{};
  const rows=(data?.cases||[]).map(r=>({...r,state:effectiveState(r,decisions[r.id])}));
- if(view.counts&&control?.case_counts)Object.assign(view.counts,control.case_counts);
+ if(view.counts){if(control?.case_counts)Object.assign(view.counts,control.case_counts);else for(let i=0;i<rows.length;i++){const old=data.cases[i].state;if(old!==rows[i].state){view.counts[old]--;view.counts[rows[i].state]++;}}}
  const title=el('h2');const icon=el('img');icon.src='/assets/mail-envelope.png';icon.alt='';icon.width=18;icon.height=18;title.append(icon,document.createTextNode('Почтовый секретарь'));
  section.replaceChildren(title,el('p',view.notice,'muted small'));
  if(data){const brief=el('div',undefined,'mail-brief');brief.append(el('strong','Ежедневная сводка'),briefCounts(view.counts.needs_user,data.pending),el('small','Проверено '+dateLabel(data.checked_at)));section.append(brief);}
@@ -66,18 +67,21 @@ export function decisionLabel(d){
 async function mailPost(path,value){
  const response=await fetch('/api/mail-secretary/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
  const result=await response.json();
- if(!response.ok)throw new Error(response.status===409?'Решение изменилось в другой вкладке. Обновите страницу.':response.status===401?'Войдите снова. Решение не отправлено.':'Не удалось подтвердить сохранение. Повторите попытку.');
+ if(!response.ok)throw new Error(path==='evidence'?'Источник сейчас недоступен. Сохранённые сведения не изменены.':result.error==='invalid_reminder'?'Выберите будущую дату не дальше одного года.':response.status===409?'Решение изменилось в другой вкладке. Обновите страницу.':response.status===401?'Войдите снова. Решение не отправлено.':'Не удалось подтвердить сохранение. Повторите попытку.');
  return result;
 }
 function caseControls(row,decision,available){
  const box=el('div',undefined,'mail-controls');const status=el('p','','small');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const evidence=el('div',undefined,'mail-evidence');const show=el('button','Показать доказательства');show.type='button';show.disabled=!available;
- show.onclick=async()=>{show.disabled=true;try{const proof=await mailPost('evidence',{case_id:row.id});evidence.replaceChildren(el('strong','Доказательства'),el('p','Письмо от '+dateLabel(proof.observed_at),'small'),el('p',proof.deadline?'Подтверждённый срок: '+proof.deadline:'Явный срок не найден','small'));
+ const displayProof=proof=>{evidence.replaceChildren(el('strong','Доказательства'),el('p','Письмо от '+dateLabel(proof.observed_at),'small'),el('p',proof.deadline?'Подтверждённый срок: '+proof.deadline:'Явный срок не найден','small'));
  if(proof.excerpt)evidence.append(el('blockquote',proof.excerpt));
  else evidence.append(el('p',proof.status==='source_changed'?'Источник изменился. Нужна повторная проверка.':'Сохранены сведения об источнике. Для проверенного фрагмента нажмите «Разобраться».','muted small'));
- evidence.append(el('p','Подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));
- }catch(error){status.textContent=error.message;show.disabled=false;}};
- evidence.append(show);box.append(evidence);
+ evidence.append(el('p','Подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));};
+ show.onclick=async()=>{show.disabled=true;try{const proof=await mailPost('evidence',{case_id:row.id});evidenceCache.set(row.id,{proof,at:Date.now(),version:row.updated_at});displayProof(proof);}catch(error){status.textContent=error.message;show.disabled=false;}};
+ const cached=evidenceCache.get(row.id);
+ if(cached&&cached.version===row.updated_at&&Date.now()-cached.at<300000)displayProof(cached.proof);
+ else {evidenceCache.delete(row.id);evidence.append(show);}
+ box.append(evidence);
  const actions=el('div',undefined,'mail-actions');const investigate=el('button','Разобраться','mail-primary');const remind=el('button','Напомнить');const resolved=el('button','Уже решено');
  for(const b of [investigate,remind,resolved]){b.type='button';b.disabled=!available;}
  const picker=el('form',undefined,'mail-reminder');picker.hidden=true;const label=el('label','Дата напоминания (Стамбул)');const date=el('input');date.type='date';date.required=true;label.append(date);const save=el('button','Сохранить дату');save.type='submit';picker.append(label,save);
@@ -87,7 +91,7 @@ function caseControls(row,decision,available){
   if(!pending||pending.action!==action||pending.remind_on!==remind_on)pending={case_id:row.id,action,remind_on,request_id:crypto.randomUUID().replaceAll('-',''),expected:decision?.request_id||null};
   for(const b of [investigate,remind,resolved,save])b.disabled=true;
   status.textContent='Сохраняем…';
-  try{const updated=await mailPost('action',pending);const response=await fetch('/api/snapshot');if(!response.ok)throw Error('Решение сохранено. Обновите страницу для нового состояния.');const snapshot=await response.json();renderSecretary(snapshot.mail_secretary,Date.now(),false,updated);}
+  try{const updated=await mailPost('action',pending);dispatchEvent(new CustomEvent('mail-secretary-change',{detail:updated}));}
   catch(error){status.textContent=error.message;for(const b of [investigate,remind,resolved,save])b.disabled=!available;}
  };
  investigate.onclick=()=>send('investigate');resolved.onclick=()=>send('resolved');remind.onclick=()=>{picker.hidden=!picker.hidden;if(!picker.hidden)date.focus();};

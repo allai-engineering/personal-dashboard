@@ -6,7 +6,7 @@ import {snapshotFresh,capacityView} from './limits.mjs';
 import {sortedAccounts,relativeTime,dateLabel,windowLabel,remainingDuration,quotaTone} from './account-view.mjs';
 const $=id=>document.getElementById(id);
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
-let snapshot=null,busy=false,transportError=false;
+let snapshot=null,busy=false,transportError=false,mailRevision=0;
 function timestamp(text,value,cls='muted') {const n=el('p',text,cls);if(value)n.title=dateLabel(value)+' (UTC+3)';return n;}
 function detailRow(root,label,value){const row=el('div',null,'detail-row');row.append(el('dt',label),el('dd',value));root.append(row);}
 function render(){
@@ -97,11 +97,13 @@ function render(){
 }
 async function load(manual=false){
  if(busy)return;busy=true;$('refresh').disabled=true;
+ const beforeMailRevision=mailRevision;
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
- try{const r=await fetch(manual?'/api/refresh':'/api/snapshot',{cache:'no-store',signal:controller.signal});if(r.status===401){location.replace('/');return;}if(!r.ok)throw Error();const s=await r.json();if(s.schema!=='cpa-account-dashboard-v1'||!Array.isArray(s.accounts))throw Error();snapshot=s;transportError=false;}
+ try{const r=await fetch(manual?'/api/refresh':'/api/snapshot',{cache:'no-store',signal:controller.signal});if(r.status===401){location.replace('/');return;}if(!r.ok)throw Error();const s=await r.json();if(s.schema!=='cpa-account-dashboard-v1'||!Array.isArray(s.accounts))throw Error();if(beforeMailRevision!==mailRevision)s.mail_control=snapshot?.mail_control;snapshot=s;transportError=false;}
  catch{transportError=true;}
  finally{clearTimeout(timer);busy=false;$('refresh').disabled=false;render();}
 }
+addEventListener('mail-secretary-change',event=>{mailRevision++;if(snapshot){snapshot={...snapshot,mail_control:event.detail};render();}});
 initNavigation();
 addEventListener('hashchange',render);
 $('refresh').addEventListener('click',()=>load(true));$('search').addEventListener('input',render);
