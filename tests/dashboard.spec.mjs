@@ -1,5 +1,18 @@
 import {test,expect} from '@playwright/test';
 
+test('mail secretary shows real case states and expires a stopped run',async({page},testInfo)=>{
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ const body=await (await page.request.get('/api/snapshot')).json();const now=new Date().toISOString();
+ body.mail_secretary={schema:1,checked_at:now,run_state:'partial',stop_reason:'backlog',pending:3,case_counts:{needs_user:1,waiting:0,done:0},omitted_cases:0,coverage:{ok:3,partial:1,unavailable:0,scope:'bounded_inbox_and_targeted'},cases:[{id:'a'.repeat(32),service:'excalidraw',kind:'renewal',state:'needs_user',deadline:'2026-11-09',confidence:'supported_notice',blocker:'owner_decision',next_action:'review_notice',owner:'user',observed_at:now,updated_at:now,last_operation:'evidence_verified',sources:['b'.repeat(32)]}],operations:[{action:'targeted_search',ref:'b'.repeat(32),outcome:'ok',at:now}]};
+ await page.route('**/api/refresh',r=>r.fulfill({json:body}));await page.locator('#refresh').click();
+ const section=page.locator('#mail-secretary');await expect(section).toContainText('Нужно ваше решение');await expect(section).toContainText('Активная работа не подтверждена');
+ await section.locator('summary').filter({hasText:'Excalidraw'}).click();await expect(section).toContainText('2026-11-09');await expect(section).toContainText('не текущее состояние сервиса');
+ await section.locator('summary').filter({hasText:'Подробнее'}).click();await expect(section).toContainText('Точечный поиск по отправителю');
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ await page.screenshot({path:testInfo.outputPath('mail-secretary.png'),fullPage:true});
+ body.mail_secretary.run_state='running';body.mail_secretary.checked_at=new Date(Date.now()-601e3).toISOString();await page.locator('#refresh').click();await expect(section).toContainText('мог прерваться');
+});
+
 test('mail subscriptions show grounded billing, source links and unknown renewal without mail text',async({page},testInfo)=>{
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
  const body=await (await page.request.get('/api/snapshot')).json();const now=new Date().toISOString();

@@ -152,3 +152,17 @@ footer{font-size:11px;color:var(--muted);margin-top:24px;padding-top:12px;border
 }
 
 .cockpit-heading h2{display:flex;align-items:center;gap:8px}.work-heading-icon{width:20px;height:20px;object-fit:contain;flex:none}
+
+/* Mail secretary: the existing cockpit remains the primary column. */
+#page-overview:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) 290px;column-gap:24px;align-items:start}
+#page-overview> :not(.mail-secretary){grid-column:1;min-width:0}
+#page-overview>.mail-secretary{grid-column:2;grid-row:1/span 9}
+.mail-secretary{border:1px solid #e4e7eb;border-radius:10px;padding:16px;background:#fff;box-shadow:0 2px 5px #18212b05;min-width:0}
+.mail-secretary h2{display:flex;gap:10px;align-items:center;font-size:16px;margin:0 0 16px}
+.mail-state{padding:14px 0;border-top:1px solid #edf0f2}
+.mail-state h3{font-size:13px;font-weight:500;margin:0 0 10px;display:flex;gap:8px;align-items:center}
+.mail-state h3:before{content:'';width:7px;height:7px;border-radius:50%;background:#a0a9b4;box-shadow:0 0 0 4px #a0a9b415;flex:none}
+.mail-needs_user h3:before{background:#e6a523}.mail-running h3:before{background:#60b6f5}.mail-done h3:before{background:#27aa83}
+.mail-count{margin-left:auto;font-variant-numeric:tabular-nums}
+.mail-secretary details{margin:10px 0;overflow-wrap:anywhere}.mail-secretary summary{cursor:pointer;font-size:13px;line-height:1.5}.mail-secretary p{line-height:1.5}
+@media(max-width:1050px){#page-overview:not([hidden]){display:block}.mail-secretary{margin:20px 0}}
