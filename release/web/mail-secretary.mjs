@@ -35,10 +35,12 @@ export function renderSecretary(data,now,transportError=false,control=null){
    const d=el('details');d.dataset.case=row.id;d.open=open.has(row.id);
    d.append(el('summary',`${services[row.service]} · ${kinds[row.kind]}`));
    const decision=decisions[row.id];
+   const handoff=control?.handoffs?.[row.id];
+   if(handoff)d.append(el('p',handoffLabel(handoff),'mail-handoff small'));
    if(decision)d.append(el('p',decisionLabel(decision),'mail-decision small'));
    if(!decision||['checked','due'].includes(decision.status))d.append(el('p',nextActions[row.next_action]|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
    d.append(el('p',row.deadline?'Срок из письма: '+row.deadline:'Срок неизвестен','small'));
-   if(!decision||decision.status==='checked')d.append(el('p',blockers[row.blocker],'small'));
+   if((!decision||decision.status==='checked')&&!handoff)d.append(el('p',blockers[row.blocker],'small'));
    d.append(el('p','Уверенность: подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));
    d.append(el('p','Ответственный: '+({user:'Вы',ops:'Hermes · ops','mail-secretary':'Почтовый секретарь'}[row.owner]),'muted small'));
    d.append(el('p','Последняя операция: '+(row.last_operation==='handoff_queued'?'поставлено в очередь ops':'проверена опора на источник')+' · '+relativeTime(row.updated_at,now),'muted small'));
@@ -60,6 +62,13 @@ export function renderSecretary(data,now,transportError=false,control=null){
 export function effectiveState(row,decision){
  const status=decision?.status;
  return status==='resolved'?'done':status==='due'?'needs_user':['snoozed','queued','running','blocked'].includes(status)?'waiting':row.state;
+}
+export function handoffLabel(h){
+ if(h.status==='queued')return 'Техническая проверка: заявка сохранена для ops.';
+ if(h.status==='dispatching')return 'Ops запросил запуск infra-dev. Результат ещё не получен.';
+ if(h.reason==='owner_login'&&h.diagnostic_completed)return 'infra-dev проверил локальный почтовый канал. Для проверки доступа к внешнему сервису нужен ваш вход. Состояние аккаунта не подтверждено.';
+ if(h.reason==='diagnostic_unavailable'&&h.diagnostic_completed)return 'infra-dev выполнил диагностику: локальный почтовый канал доступен не полностью. Нужна проверка ops.';
+ return 'Исполнение infra-dev не подтверждено. Повторный запуск автоматически не создан; можно снова выбрать «Разобраться».';
 }
 export function decisionLabel(d){
  return ({resolved:'Вы отметили дело решённым. Решение сохранено.',snoozed:'Напомнить '+d.remind_on+' по Стамбулу. До этой даты дело отложено.',due:'Наступила выбранная дата напоминания: '+d.remind_on,queued:'Разобраться: в очереди ближайшего ежедневного запуска.',running:'Запрос принят в текущий разбор.',checked:'Повторная проверка источника завершена. Результат — в карточке.',blocked:'Разбор начат, но подтверждённого результата пока нет. Запрос сохранён.'})[d.status]||'Решение сохранено.';
