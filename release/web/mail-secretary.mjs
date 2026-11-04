@@ -4,6 +4,7 @@ const states={needs_user:'Нужно ваше решение',running:'Hermes з
 const kinds={renewal:'Продление',payment_notice:'Уведомление об оплате',invoice:'Счёт',reply_needed:'Нужен ответ',access:'Доступ',waiting_reply:'Ожидание ответа',resolved_notice:'Разбор уведомления'};
 const services={unknown:'Почтовое дело',excalidraw:'Excalidraw',neon:'Neon',github:'GitHub',google:'Google',yandex:'Яндекс',hostkey:'Hostkey',openai:'OpenAI',anthropic:'Anthropic'};
 const blockers={owner_decision:'Нужно решение владельца',current_state_unverified:'Текущее состояние сервиса не подтверждено',awaiting_reply:'Есть уведомление об ожидаемом ответе',technical_review:'Передано в очередь ops; запуск специалиста ещё не подтверждён',notice_reviewed:'Разбор уведомления завершён; состояние сервиса не проверялось'};
+const nextActions={review_renewal:'Следующий шаг: решить, нужно ли продление сервиса. Оплата или отмена требуют вашего поручения.',review_invoice:'Следующий шаг: проверить основание счёта и факт оплаты в сервисе; письмо само по себе не доказывает долг.',review_reply:'Следующий шаг: определить, нужен ли ответ и какие сведения можно сообщить. Отправка требует вашего поручения.',review_access:'Следующий шаг: проверить уведомление о доступе через ops; вход или изменение аккаунта требуют отдельного решения.'};
 const operations={handoff_queued:'Поставлено в очередь ops',read_pdf:'Прочитана выбранная страница PDF',search:'Поиск новых писем',targeted_search:'Точечный поиск по отправителю',read:'Прочитано выбранное письмо',verify:'Проверена опора на источник',case_recorded:'Сохранено дело',irrelevant_verified:'Проверено отсутствие дела',skill_read:'Прочитан рабочий навык',tool_error:'Операция не завершилась'};
 export function secretaryView(data,now,transportError=false){
  const age=now-Date.parse(data?.checked_at);
@@ -25,7 +26,7 @@ export function renderSecretary(data,now,transportError=false){
   for(const row of (data?.cases||[]).filter(r=>r.state===state)){
    const d=el('details');d.dataset.case=row.id;d.open=open.has(row.id);
    d.append(el('summary',`${services[row.service]} · ${kinds[row.kind]}`));
-   d.append(el('p',row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.','small'));
+   d.append(el('p',nextActions[row.next_action]|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
    d.append(el('p',row.deadline?'Срок из письма: '+row.deadline:'Срок неизвестен','small'));
    d.append(el('p',blockers[row.blocker],'small'));
    d.append(el('p','Уверенность: подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));

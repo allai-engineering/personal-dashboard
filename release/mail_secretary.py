@@ -49,7 +49,7 @@ def validate(data):
             raise ValueError('mail_secretary_case_state')
         if row['confidence'] != 'supported_notice' or row['blocker'] not in BLOCKERS:
             raise ValueError('mail_secretary_evidence')
-        if row['next_action'] not in ('review_notice', 'check_latest', 'none', 'ops_review') or row['owner'] not in ('user', 'ops', 'mail-secretary'):
+        if row['next_action'] not in ('review_notice', 'review_renewal', 'review_invoice', 'review_reply', 'review_access', 'check_latest', 'none', 'ops_review') or row['owner'] not in ('user', 'ops', 'mail-secretary'):
             raise ValueError('mail_secretary_action')
         if row['last_operation'] not in ('evidence_verified', 'handoff_queued'):
             raise ValueError('mail_secretary_operation')
