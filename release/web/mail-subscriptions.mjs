@@ -5,6 +5,7 @@ const mailboxLabel=id=>id.startsWith('google-')?'Gmail · '+id.slice(7):id==='ya
 export function mailView(data,now,transportError=false){
  const fresh=!transportError&&freshAt(data?.checked_at,now,90000);
  const gaps=(data?.coverage||[]).filter(c=>c.status!=='ok'||!c.history_complete);
+ const failed=gaps.filter(c=>['unavailable','login_required'].includes(c.status));
  const rows=(data?.records||[]).map(r=>{
   const sourceAt=r.sources.reduce((latest,s)=>s.date>latest?s.date:latest,'');
   const access=r.sources.some(s=>data.coverage.some(c=>c.mailbox===s.mailbox&&['ok','partial'].includes(c.status)));
@@ -12,7 +13,7 @@ export function mailView(data,now,transportError=false){
   const upcoming=r.renewal_date&&r.renewal_date>=new Date(now).toISOString().slice(0,10)?r.renewal_date:null;
   return {...r,stale,sourceAt,upcoming,tone:stale?'unknown':r.status==='payment_failed'?'warning':'ok'};
  }).sort((a,b)=>(a.tone==='warning'?-1:0)-(b.tone==='warning'?-1:0)||(a.upcoming||'9999').localeCompare(b.upcoming||'9999')||a.service.localeCompare(b.service));
- return {rows,notice:!fresh?'Проверка почты недоступна или устарела. Ниже — прежние сведения.':gaps.length?'Охват неполный: часть истории ещё проверяется или источник недоступен.':'Ежедневная проверка выполнена. Письма подтверждают сведения на дату источника, а не текущее состояние сервиса.'};
+ return {rows,notice:!fresh?'Проверка почты недоступна или устарела. Ниже — прежние сведения.':failed.length?'Не завершён сбор: '+failed.map(c=>mailboxLabel(c.mailbox)+(c.status==='login_required'?' — нужен вход':'')).join(', ')+'. Найденные ранее записи сохранены.':gaps.length?'Охват неполный: история писем проверена не полностью. Найденные записи уже показаны.':'Ежедневная проверка выполнена. Письма подтверждают сведения на дату источника, а не текущее состояние сервиса.'};
 }
 export function renderMail(data,now,transportError=false){
  let section=document.getElementById('mail-subscriptions');
