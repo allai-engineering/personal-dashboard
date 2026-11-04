@@ -4,7 +4,7 @@ const historyCache=new Map();
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const states={needs_user:'Нужно ваше решение',running:'Hermes занимается',waiting:'Ожидание и очередь',done:'Завершено'};
 const queues={reply_needed:'Я должен ответить',waiting_reply:'Ждём ответа',other:'Другие дела',snoozed:'Отложено',done:'Завершено'};
-const kinds={renewal:'Продление',payment_notice:'Уведомление об оплате',invoice:'Счёт',reply_needed:'Нужен ответ',access:'Доступ',waiting_reply:'Ожидание ответа',resolved_notice:'Разбор уведомления'};
+const kinds={reply:'Ответ по вопросу',renewal:'Продление',payment_notice:'Уведомление об оплате',invoice:'Счёт',reply_needed:'Нужен ответ',access:'Доступ',waiting_reply:'Ожидание ответа',resolved_notice:'Разбор уведомления'};
 const services={unknown:'Почтовое дело',excalidraw:'Excalidraw',neon:'Neon',github:'GitHub',google:'Google',yandex:'Яндекс',hostkey:'Hostkey',openai:'OpenAI',anthropic:'Anthropic'};
 const blockers={owner_decision:'Нужно решение владельца',current_state_unverified:'Текущее состояние сервиса не подтверждено',awaiting_reply:'Есть уведомление об ожидаемом ответе',technical_review:'Передано в очередь ops; запуск специалиста ещё не подтверждён',notice_reviewed:'Разбор уведомления завершён; состояние сервиса не проверялось'};
 const nextActions={review_renewal:'Следующий шаг: решить, нужно ли продление сервиса. Оплата или отмена требуют вашего поручения.',review_invoice:'Следующий шаг: проверить основание счёта и факт оплаты в сервисе; письмо само по себе не доказывает долг.',review_reply:'Следующий шаг: определить, нужен ли ответ и какие сведения можно сообщить. Отправка требует вашего поручения.',review_access:'Следующий шаг: проверить уведомление о доступе через ops; вход или изменение аккаунта требуют отдельного решения.'};
@@ -124,7 +124,7 @@ function briefCounts(decisions,pending,counts){const grid=el('div',undefined,'ma
 
 export function historyLabel(event){
  if(event.event==='reminder_cancelled')return 'Напоминание отменено: '+({reply_received:'получен ответ',question_resolved:'вопрос решён по письму',owner_resolved:'вы отметили вопрос решённым'}[event.reason]||'причина неизвестна');
- return ({source_verified:'Проверен источник',incoming_request:'Получен запрос — нужен ваш ответ',sent_request:'Отправленный запрос — ждём ответа',reply_received:'Проверен новый ответ по вопросу',question_resolved:'Письмо подтверждает решение вопроса',owner_investigate:'Вы выбрали «Разобраться»',owner_resolved:'Вы отметили «Уже решено»',owner_remind:'Вы назначили напоминание на '+event.remind_on})[event.event]||'Событие дела';
+ return ({source_verified:'Проверен источник',incoming_request:'Получен запрос — нужен ваш ответ',sent_request:'Отправленный запрос — ждём ответа',reply_received:'Проверен новый ответ по вопросу',reply_sent:'Проверен ваш отправленный ответ',question_resolved:'Письмо подтверждает решение вопроса',owner_investigate:'Вы выбрали «Разобраться»',owner_resolved:'Вы отметили «Уже решено»',owner_remind:'Вы назначили напоминание на '+event.remind_on})[event.event]||'Событие дела';
 }
 function caseHistory(row,decision,available,open){
  const detail=el('details',undefined,'mail-history');detail.dataset.case=row.id+':history';detail.open=open.has(detail.dataset.case);detail.append(el('summary','История дела'));
