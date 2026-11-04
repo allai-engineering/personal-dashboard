@@ -13,6 +13,22 @@ test('mail secretary shows real case states and expires a stopped run',async({pa
  body.mail_secretary.run_state='running';body.mail_secretary.checked_at=new Date(Date.now()-601e3).toISOString();await page.locator('#refresh').click();await expect(section).toContainText('мог прерваться');
 });
 
+test('mail owner decisions persist on reload and evidence stays inert',async({page},testInfo)=>{
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ const base=await(await page.request.get('/api/snapshot')).json();const now=new Date().toISOString();const id=(testInfo.project.name==='mobile'?'c':'d').repeat(32);
+ base.mail_secretary={schema:1,checked_at:now,run_state:'partial',stop_reason:'backlog',pending:20,case_counts:{needs_user:1,waiting:0,done:0},omitted_cases:0,coverage:{ok:0,partial:4,unavailable:0,scope:'bounded_inbox_and_targeted'},cases:[{id,service:'excalidraw',kind:'renewal',state:'needs_user',deadline:'2026-11-09',confidence:'supported_notice',blocker:'owner_decision',next_action:'review_renewal',owner:'user',observed_at:now,updated_at:now,last_operation:'evidence_verified',sources:['b'.repeat(32)]}],operations:[]};
+ await page.route(/\/api\/(snapshot|refresh)$/,async route=>{const actual=await route.fetch();const control=(await actual.json()).mail_control;await route.fulfill({json:{...base,mail_control:control}});});
+ await page.locator('#refresh').click();const section=page.locator('#mail-secretary');await section.locator('summary').filter({hasText:'Excalidraw'}).click();
+ await section.getByRole('button',{name:'Показать доказательства'}).click();await expect(section.locator('blockquote')).toContainText('<script>untrusted</script>');await expect(section.locator('script')).toHaveCount(0);
+ await section.getByRole('button',{name:'Разобраться',exact:true}).click();await expect(section).toContainText('в очереди ближайшего ежедневного запуска');
+ await page.reload();await expect(section).toContainText('Ожидание и очередь');await section.locator('summary').filter({hasText:'Excalidraw'}).click();await expect(section).toContainText('в очереди ближайшего ежедневного запуска');
+ await section.getByRole('button',{name:'Напомнить',exact:true}).click();const day=new Date(Date.now()+3*86400000).toISOString().slice(0,10);await section.getByLabel('Дата напоминания (Стамбул)').fill(day);await section.getByRole('button',{name:'Сохранить дату'}).click();await expect(section).toContainText('До этой даты дело отложено');
+ await section.getByRole('button',{name:'Уже решено',exact:true}).click();await expect(section).toContainText('Вы отметили дело решённым');
+ await page.reload();await section.locator('summary').filter({hasText:'Excalidraw'}).click();await expect(section).toContainText('Вы отметили дело решённым');
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ await section.screenshot({path:testInfo.outputPath('mail-v2-resolved.png')});
+});
+
 test('mail subscriptions show grounded billing, source links and unknown renewal without mail text',async({page},testInfo)=>{
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
  const body=await (await page.request.get('/api/snapshot')).json();const now=new Date().toISOString();

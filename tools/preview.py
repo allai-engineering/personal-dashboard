@@ -3,6 +3,17 @@ import argparse, datetime as dt, hashlib, pathlib, sys, types
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'release'))
 import server
 
+mail_decisions={}
+def mail_fixture(value):
+ if value["operation"]=="evidence":return {"observed_at":dt.datetime.now(dt.timezone.utc).isoformat(),"deadline":"2026-11-09","kind":"renewal","sources":["b"*32],"excerpt":"Synthetic renewal notice: renews 2026-11-09. <script>untrusted</script>","status":"verified_excerpt"}
+ if value["operation"]=="action":
+  current=mail_decisions.get(value["case_id"])
+  if value["expected"] != (current["request_id"] if current else None):return {"error":"decision_conflict"}
+  mail_decisions[value["case_id"]]={k:value[k] for k in ("action","remind_on","request_id")}
+  mail_decisions[value["case_id"]].update(at=dt.datetime.now(dt.timezone.utc).isoformat(),status={"resolved":"resolved","remind":"snoozed","investigate":"queued"}[value["action"]])
+ return {"available":True,"decisions":mail_decisions}
+
+
 def fixture():
  now=dt.datetime.now(dt.timezone.utc);t=now.isoformat();reset=(now+dt.timedelta(days=2)).isoformat()
  cockpit={'schema':'captain-cockpit-v1','collected_at':t,'read_only':True,'court':{'status':'partial','observed_at':t,'receipt_status':'ok','receipt_scope':'kad_metadata','receipt_observed_at':t,'changes':0,'important':0,'unverified':1,'carried_forward':2,'search_status':'incomplete','confirmed_dates_available':False,'known_cases':26},'profiles':[{'id':'ops','status':'ok','stored_jobs':1},{'id':'lawyer','status':'ok','stored_jobs':1}],'tasks':[],'events':[]}
@@ -23,6 +34,7 @@ def main():
  salt=bytes.fromhex('a1'*32);key=bytes.fromhex('b2'*32)
  auth=server.PasswordAuth(b'fixture',hashlib.pbkdf2_hmac('sha256',b'fixture-only-browser-password',salt,600000),salt,key)
  web=server.DashboardServer(('127.0.0.1',args.port),server.Handler)
+ server.mail_control=mail_fixture
  web.auth=auth;web.public_origin='http://127.0.0.1:'+str(args.port);web.snapshot_cache=types.SimpleNamespace(get=fixture)
  web.serve_forever()
 if __name__=='__main__':main()

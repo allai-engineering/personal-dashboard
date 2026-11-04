@@ -89,7 +89,7 @@ function render(){
  if(selected.length&&!cards.childElementCount)cards.append(el('p',unknown.length?'Свежие квоты пока недоступны. Аккаунты сохранены ниже.':'Аккаунты с проблемами доступа показаны отдельно.','empty'));
  const resources=renderOperations(effective,transportError,now);
  renderCockpit(effective,all,resources,now,transportError);
- renderSecretary(effective?.mail_secretary,now,transportError);
+ renderSecretary(effective?.mail_secretary,now,transportError,effective?.mail_control);
  const cap=fresh?capacityView(snapshot?.runtime):null;
  $('capacity').textContent=cap?`В выборке плагина занято ${number(cap.used)} из ${number(cap.limit)} слотов. Охват: ${number(cap.count)} из ${number(snapshot?.inventory?.listed_accounts)} аккаунтов; это не общая свободная ёмкость.`:'Общая текущая занятость неизвестна: нет пригодного полного измерения.';
  const p=snapshot?.runtime?.policy;

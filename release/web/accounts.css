@@ -166,3 +166,14 @@ footer{font-size:11px;color:var(--muted);margin-top:24px;padding-top:12px;border
 .mail-count{margin-left:auto;font-variant-numeric:tabular-nums}
 .mail-secretary details{margin:10px 0;overflow-wrap:anywhere}.mail-secretary summary{cursor:pointer;font-size:13px;line-height:1.5}.mail-secretary p{line-height:1.5}
 @media(max-width:1050px){#page-overview:not([hidden]){display:block}.mail-secretary{margin:20px 0}}
+/* 12ui v2 candidate C: briefing, source panel and compact case actions. */
+.mail-brief{margin:18px 0;padding:14px;border:1px solid #e1ebff;border-radius:10px;background:#f3f7ff;color:#17355c}
+.mail-brief strong{font-size:13px}.mail-brief p{font-size:14px;margin:10px 0}.mail-brief small{font-size:11px;color:#586b80}
+.mail-evidence{background:#f5f7f9;border-radius:8px;padding:12px;margin:14px 0;font-size:12px}
+.mail-evidence blockquote{margin:10px 0;padding-left:10px;border-left:2px solid #90baff;white-space:pre-wrap;overflow-wrap:anywhere}
+.mail-secretary button{font:inherit;font-size:12px;padding:10px 9px;border:1px solid #dce4ee;background:#fff;border-radius:7px;cursor:pointer;min-height:42px;color:#183557}
+.mail-secretary button.mail-primary{background:#327ff5;color:#fff;border-color:#327ff5}
+.mail-secretary button:disabled{opacity:.55;cursor:default}.mail-secretary button:focus-visible,.mail-secretary input:focus-visible{outline:2px solid #286ad8;outline-offset:2px}
+.mail-actions{display:flex;flex-wrap:wrap;gap:6px}.mail-actions button{flex:1 1 auto}.mail-decision{background:#eef8f3;border-radius:6px;padding:10px;color:#145b45}
+.mail-reminder:not([hidden]){display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.mail-reminder label{font-size:12px;display:grid;gap:6px;max-width:100%}.mail-reminder input{font:inherit;padding:8px;border:1px solid #dce4ee;border-radius:6px;min-width:0;max-width:100%;background:#fff;color:#183557}
+.mail-brief-counts{display:grid;grid-template-columns:1fr 1fr;margin:12px 0;gap:12px;text-align:center}.mail-brief-counts>div{display:grid;gap:4px}.mail-brief-counts>div+div{border-left:1px solid #dce5f4}.mail-brief-counts b{font-size:23px;font-weight:600}.mail-brief-counts span{font-size:11px}
