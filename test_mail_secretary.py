@@ -19,6 +19,12 @@ def fixture():
 
 
 class SecretarySchemaTests(unittest.TestCase):
+    def test_substantive_reply_is_reviewable_without_false_completion(self):
+        data = fixture(); data['cases'][0]['kind'] = 'reply'
+        row = validate(data)['cases'][0]
+        self.assertEqual(row['state'], 'needs_user')
+        self.assertEqual(row['next_action'], 'review_notice')
+
     def test_private_fields_and_free_model_strings_rejected(self):
         self.assertIsNone(validate(fixture())['cases'][0]['deadline'])
         for field in ('subject', 'body', 'quote', 'account', 'relations', 'email'):
