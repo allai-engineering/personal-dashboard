@@ -43,8 +43,9 @@ export function renderSecretary(data,now,transportError=false,control=null){
    if((!decision||decision.status==='checked')&&!handoff)d.append(el('p',blockers[row.blocker],'small'));
    d.append(el('p','Уверенность: подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));
    d.append(el('p','Ответственный: '+({user:'Вы',ops:'Hermes · ops','mail-secretary':'Почтовый секретарь'}[row.owner]),'muted small'));
-   const lastOperation=handoff?(handoff.diagnostic_completed?'выполнена ограниченная диагностика infra-dev':handoff.status==='queued'?'поставлено в очередь ops':handoff.status==='dispatching'?'запрошен запуск infra-dev':'результат infra-dev не подтверждён'):(row.last_operation==='handoff_queued'?'поставлено в очередь ops':'проверена опора на источник');
-   d.append(el('p','Последняя операция: '+lastOperation+' · '+relativeTime(handoff?.at||row.updated_at,now),'muted small'));
+   const latestHandoff=handoff&&Date.parse(handoff.at)>=Date.parse(row.updated_at)?handoff:null;
+   const lastOperation=latestHandoff?(latestHandoff.diagnostic_completed?'выполнена ограниченная диагностика infra-dev':latestHandoff.status==='queued'?'поставлено в очередь ops':latestHandoff.status==='dispatching'?'запрошен запуск infra-dev':'результат infra-dev не подтверждён'):(row.last_operation==='handoff_queued'?'поставлено в очередь ops':'проверена опора на источник');
+   d.append(el('p','Последняя операция: '+lastOperation+' · '+relativeTime(latestHandoff?.at||row.updated_at,now),'muted small'));
    d.append(el('p','Источник от '+dateLabel(row.observed_at)+' · '+row.sources.map(s=>s.slice(0,8)).join(', '),'muted small'));
    d.append(caseControls(row,decision,!!control?.available));
    group.append(d);
