@@ -120,3 +120,14 @@ assert.match(ownerEvents(paid)[0].detail,/20.00 USD/);
 paid.mail_subscriptions.coverage[0].checked_at='2026-10-01T00:00:00Z';
 assert.equal(ownerEvents(paid).length,0,'a recent publication cannot freshen an old mailbox check');
 console.log('Owner dates, canonical reminders, field-specific evidence and Istanbul boundaries passed');
+
+const splitAmount=structuredClone(renewal);
+Object.assign(splitAmount.mail_subscriptions.records[0],{amount:'99.00',currency:'USD',amount_kind:'next_charge'});
+splitAmount.mail_subscriptions.coverage.push({mailbox:'closed',status:'unavailable',checked_at:stamp,history_complete:false});
+splitAmount.mail_subscriptions.records[0].sources.push({mailbox:'closed',ref:'c'.repeat(32),date:stamp,url:null,fields:['amount']});
+assert.match(ownerEvents(splitAmount)[0].detail,/Сумма продления неизвестна/,'an unavailable amount source cannot borrow fresh renewal evidence');
+splitAmount.mail_subscriptions.coverage[1].status='ok';
+assert.match(ownerEvents(splitAmount)[0].detail,/99.00 USD/);
+assert.match(ownerEvents(splitAmount)[0].source,/cccccccc/,'the displayed charge keeps its own source reference');
+splitAmount.mail_subscriptions.coverage[1].checked_at='2026-10-01T00:00:00Z';
+assert.match(ownerEvents(splitAmount)[0].detail,/Сумма продления неизвестна/,'stale amount support stays unknown');

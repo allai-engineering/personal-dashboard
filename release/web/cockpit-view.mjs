@@ -28,10 +28,14 @@ export const compact=(record,seen)=>record.tone!=='critical'&&!record.unconfirme
 export function overview(snapshot,accounts,resources,now=Date.now(),transportError=false){
  const records=[],events=[],retired=[];
  for(const r of mailView(snapshot?.mail_subscriptions,now,transportError).rows){
-  const sources=r.sources.filter(s=>s.fields?.includes('renewal')&&snapshot.mail_subscriptions.coverage.some(c=>c.mailbox===s.mailbox&&['ok','partial'].includes(c.status)&&freshAt(c.checked_at,now,90000)));
-  if(r.stale||r.status==='cancelled'||!r.renewal_date||!sources.length)continue;
-  events.push({id:'renewal-'+r.id,title:r.service,at:r.renewal_date,dateOnly:true,kind:'Продление по уведомлению',source:'Почтовое уведомление · '+sources.map(s=>s.mailbox+' / '+s.ref.slice(0,8)).join(', '),observedAt:sources.reduce((latest,s)=>s.date>latest?s.date:latest,''),
-   detail:(r.amount_kind==='next_charge'&&r.amount!==null?'Сумма из уведомления: '+r.amount+' '+r.currency:'Сумма продления неизвестна')+'. Письмо подтверждает указанную дату, а не текущее состояние подписки.'});
+  const accessible=r.sources.filter(s=>snapshot.mail_subscriptions.coverage.some(c=>c.mailbox===s.mailbox&&['ok','partial'].includes(c.status)&&freshAt(c.checked_at,now,90000)));
+  const renewals=accessible.filter(s=>s.fields?.includes('renewal'));
+  if(r.stale||r.status==='cancelled'||!r.renewal_date||!renewals.length)continue;
+  const charge=r.amount_kind==='next_charge'&&r.amount!==null&&accessible.some(s=>s.fields?.includes('amount'));
+  const sources=accessible.filter(s=>s.fields?.includes('renewal')||charge&&s.fields?.includes('amount'));
+  events.push({id:'renewal-'+r.id,title:r.service,at:r.renewal_date,dateOnly:true,kind:'Продление по уведомлению',source:'Почтовое уведомление · '+sources.map(s=>s.mailbox+' / '+s.ref.slice(0,8)).join(', '),observedAt:renewals.reduce((latest,s)=>s.date>latest?s.date:latest,''),
+   evidence:sources.map(s=>['Подтверждение: '+s.fields.filter(f=>f==='renewal'||charge&&f==='amount').map(f=>f==='renewal'?'дата':'сумма').join(', '),s.mailbox+' / '+s.ref.slice(0,8)+' · '+dateLabel(s.date)]),
+   detail:(charge?'Сумма из уведомления: '+r.amount+' '+r.currency:'Сумма продления неизвестна')+'. Письмо подтверждает указанную дату, а не текущее состояние подписки.'});
  }
  const control=snapshot?.mail_control;
  if(!transportError&&control?.available)for(const r of snapshot?.mail_secretary?.cases||[]){

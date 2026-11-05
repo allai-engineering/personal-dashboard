@@ -122,7 +122,7 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  $('cockpit-unknown-count').textContent='Пробелы в данных: '+gaps.length;$('cockpit-unknown').hidden=!gaps.length;
  $('cockpit-unknown-list').replaceChildren(...gaps.map(r=>row({...r,tone:'unknown',detail:'Нет свежего подтверждения. Откройте источник и время замера.'},now)));
  const events=view.events.map(e=>{
-  const record={id:e.id,title:e.title,domain:null,observedAt:e.observedAt,tone:'unknown',badge:e.kind,when:e.when+' · '+(e.dateOnly?e.at:dateLabel(e.at)),detail:e.detail?e.detail+' '+e.source:e.source,evidence:[['Вид даты',e.kind],['Дата',e.dateOnly?e.at+' · время не указано':dateLabel(e.at)],['Источник',e.source]],next:'Посмотреть дату'};
+  const record={id:e.id,title:e.title,domain:null,observedAt:e.observedAt,tone:'unknown',badge:e.kind,when:e.when+' · '+(e.dateOnly?e.at:dateLabel(e.at)),detail:e.detail?e.detail+' '+e.source:e.source,evidence:[['Вид даты',e.kind],['Дата',e.dateOnly?e.at+' · время не указано':dateLabel(e.at)],['Источник',e.source],...(e.evidence||[])],next:'Посмотреть дату'};
   registry.set(opaque(record.id),record);return row(record,now);
  });
  $('cockpit-work').replaceChildren(...delegated.slice(0,6).map(r=>row(r,now,{scope:'work'})));
