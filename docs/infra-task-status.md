@@ -23,4 +23,6 @@ The overview and Hermes task counters use the same phases as their cards: queued
 
 Cards retain the last reported operation, its age and the stop reason. Evidence separates source observation, checkpoint update, execution-log read and publication time. A mismatched source condition retains only explicitly historical operation/blocker metadata; it cannot revive activity or an owner request. Historical Linux plan checks remain distinct from recovery. Mail's saved running flag has no native liveness identity, so it cannot establish active execution even immediately after publication. A limited mail diagnostic and an owner's resolved mark keep their existing scoped labels.
 
+Within the current tab, a missing ops snapshot retains unfinished preparation on a healthy machine as unconfirmed history, including its last blocker. This uses the existing view registry; it adds no persistent history store or proof that the specialist still runs.
+
 These are presentation changes over the existing allowlisted contracts. They add no observer, service, source read or operational action. The protected evidence-view module still requires the separately reviewed integration release path; ordinary assets-only deployment must continue to reject its changed hash. Actual owner-phone acceptance of the candidate remains required before installation.

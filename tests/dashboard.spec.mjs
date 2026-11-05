@@ -3,6 +3,7 @@ import {test,expect} from '@playwright/test';
 test('Hermes states and counts follow verified execution, stops and scoped results',async({page},testInfo)=>{
  await page.clock.install();
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ await expect(page.locator('#cockpit-work-count')).not.toBeEmpty();
  const body=await(await page.request.get('/api/snapshot')).json(),stamp=new Date().toISOString(),m=body.operations.fleet.machines[0];
  body.accounts=[];body.operations.balances=[];
  Object.assign(body.cockpit.court,{status:'ok',receipt_scope:'courts',search_status:'complete',unverified:0,carried_forward:0});
@@ -10,7 +11,8 @@ test('Hermes states and counts follow verified execution, stops and scoped resul
  const item={record_id:'machine-'+m.id,condition_key:'service:warning',fingerprint:'b'.repeat(64),source_state:'open',source_at:stamp,queued_at:stamp,updated_at:stamp,state:'queued',action:'diagnose',blocker:'none',decision:null,task_ref:null,execution_key:'b'.repeat(24),execution_state:'unknown',execution_liveness:'unverified'};
  const task={...body.cockpit.tasks[2],id:'b'.repeat(24),state:'running',liveness:'unverified',label:'Synthetic execution'};
  body.cockpit.tasks=[task];body.cockpit.work={status:'ok',observed_at:stamp,items:[item]};
- await page.route(/\/api\/(snapshot|refresh)$/,r=>r.fulfill({json:body}));await page.locator('#refresh').click();
+ // A refresh intentionally retains old faults; start this journey with only its own fixture.
+ await page.route(/\/api\/(snapshot|refresh)$/,r=>r.fulfill({json:body}));await page.reload();
  const card=()=>page.locator('#cockpit-work .cockpit-row').filter({hasText:m.id});
  await expect(card()).toHaveAttribute('data-work-phase','queued');
  await expect(page.locator('#cockpit-work-count')).toHaveText('В работе: 0 · В очереди: 1');
@@ -243,6 +245,14 @@ test('preparation remains visible after the source becomes healthy',async({page}
  body.cockpit.work.items[0].preparation={status:'passed_conditional',tested_at:stamp,checks:17,current_occurrence:true};
  await page.locator('#refresh').click();await expect(page.locator('#cockpit-work')).toContainText('17 Linux-проверок пройдено · план условный');
  await expect(page.locator('#cockpit-work')).toContainText('Нужна проверенная процедура исправления');
+ const savedWork=body.cockpit.work;
+ body.cockpit.work={status:'unavailable',observed_at:stamp,items:[]};await page.locator('#refresh').click();
+ const retained=page.locator('#cockpit-work .cockpit-row').filter({hasText:m.id});
+ await expect(retained).toHaveAttribute('data-work-phase','unconfirmed');
+ await expect(retained).toContainText('Ранее');await expect(retained).toContainText('Нужна проверенная процедура исправления');
+ await expect(page.locator('#cockpit-decisions')).not.toContainText(m.id);
+ await page.locator('#refresh').click();await expect(retained).toContainText('Нужна проверенная процедура исправления');
+ body.cockpit.work=savedWork;await page.locator('#refresh').click();
  await page.locator('#cockpit-work summary').click();
  await page.locator('#cockpit-work .cockpit-row').filter({hasText:m.id}).getByRole('link').click();
  await expect(page.locator('#evidence-content')).toContainText('не подтверждает очистку');

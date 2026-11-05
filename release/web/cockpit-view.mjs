@@ -126,11 +126,16 @@ function incidentStage(record,work,now,transportError){
 }
 
 export function maintenanceWork(record,work,now=Date.now(),transportError=false){
- if(record.state!=='clear'||work?.status!=='ok')return null;
- const item=work.items.find(w=>w.record_id===record.id&&w.source_state==='clear'&&['accepted','waiting','resolved'].includes(w.state));
- if(!item)return null;
+ if(record.state!=='clear')return null;
+ const item=work?.status==='ok'?work.items.find(w=>w.record_id===record.id&&w.source_state==='clear'&&['accepted','waiting','resolved'].includes(w.state)):null;
+ if(!item){
+  if(!record.work?.maintenance)return null;
+  const stage=incidentView(record,work,now,transportError);
+  return {...stage,maintenance:true,preparation:stage.preparation||record.work.preparation&&{...record.work.preparation,label:record.work.preparation.label.startsWith('Ранее')?record.work.preparation.label:'Ранее · '+record.work.preparation.label}};
+ }
  // A healthy source can coexist with ongoing preparation; this is activity, not a new fault.
  const stage=incidentView({...record,condition_key:item.condition_key},work,now,transportError);
+ stage.maintenance=item.state!=='resolved';
  if(item.state==='waiting'&&!transportError&&freshAt(work.observed_at,now,1800))stage.label=(item.actor||'ops')+' · ожидание';
  return stage;
 }

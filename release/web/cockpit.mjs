@@ -105,6 +105,7 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  for(const r of [...view.records,...active.values()])if(r.state==='clear'||view.retired.includes(r.entity))cleared=seen.delete(opaque(r.id))||cleared;
  if(cleared)saveSeen();
  active=reconcile(active,view.records,view.retired);
+ const previousRegistry=registry;
  registry=new Map(view.records.map(r=>[opaque(r.id),r]));for(const r of active.values())registry.set(opaque(r.id),r);
  for(const r of active.values()){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.publishedAt=snapshot?.cockpit?.collected_at;r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
  const seenForRows=new Map([...active.values()].map(r=>[r.id,seen.get(opaque(r.id))]));
@@ -117,8 +118,8 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  for(const r of gaps.filter(r=>r.work.lane==='owner')){decisions.push(r);expanded.push(r);}
  delegated.push(...gaps.filter(r=>(r.work.item||r.work.history)&&r.work.lane==='hermes'));
  for(const r of view.records){
-  const work=maintenanceWork(r,snapshot?.cockpit?.work,now,transportError);
-  if(work){const activity={...r,tone:'ok',publishedAt:snapshot?.cockpit?.collected_at,owner:'Hermes · '+(work.item.actor||'ops'),work,detail:'На замере без замечаний. Результат и подготовка Hermes учитываются отдельно.'};if(work.active)delegated.unshift(activity);else delegated.push(activity);registry.set(opaque(r.id),activity);}
+  const previous=previousRegistry.get(opaque(r.id)),work=maintenanceWork({...r,work:previous?.work},snapshot?.cockpit?.work,now,transportError);
+  if(work){const activity={...r,tone:'ok',publishedAt:snapshot?.cockpit?.collected_at,owner:work.item?'Hermes · '+(work.item.actor||'ops'):previous.owner,work,detail:'На замере без замечаний. Результат и подготовка Hermes учитываются отдельно.'};if(work.active)delegated.unshift(activity);else delegated.push(activity);registry.set(opaque(r.id),activity);}
  }
  const workCounts=workSummary(delegated.map(r=>r.work));
  $('cockpit-coverage').replaceChildren(el('strong',`${decisions.length} решений для вас · Задачи Hermes — ${workCounts} · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
