@@ -107,7 +107,7 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  active=reconcile(active,view.records,view.retired);
  const previousRegistry=registry;
  registry=new Map(view.records.map(r=>[opaque(r.id),r]));for(const r of active.values())registry.set(opaque(r.id),r);
- for(const r of active.values()){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.publishedAt=snapshot?.cockpit?.collected_at;r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
+ for(const r of active.values()){r.work=incidentView({...r,work:r.work||previousRegistry.get(opaque(r.id))?.work},snapshot?.cockpit?.work,now,transportError);r.publishedAt=snapshot?.cockpit?.collected_at;r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
  const seenForRows=new Map([...active.values()].map(r=>[r.id,seen.get(opaque(r.id))]));
  const ordered=[...active.values()].sort((a,b)=>Number(b.tone==='critical')-Number(a.tone==='critical')||Number(b.unconfirmed)-Number(a.unconfirmed));
  const decisions=ordered.filter(r=>r.work.lane==='owner');

@@ -255,8 +255,11 @@ test('preparation remains visible after the source becomes healthy',async({page}
  await refresh();await expect(retained).toContainText('Нужна проверенная процедура исправления');
  await page.locator('#nav-machines').click();await expect(page.locator('#machine-'+m.id)).toContainText('Нужна проверенная процедура исправления');
  await expect(page.locator('#machine-'+m.id)).toContainText('17 Linux-проверок');
+ m.state='degraded';m.issues=[{code:'service',text:'Synthetic new fault',severity:'warning',observed_at:stamp,ttl_seconds:1800}];await refresh();
+ await page.locator('#nav-overview').click();await expect(retained).toHaveAttribute('data-work-phase','unconfirmed');await expect(retained).toContainText('Нужна проверенная процедура исправления');await expect(retained).toContainText('17 Linux-проверок');
+ m.state='observed_ok';m.issues=[];
  m.observed_at=new Date(Date.now()-864e5).toISOString();await refresh();
- await expect(page.locator('#machine-'+m.id)).toContainText('Нужна проверенная процедура исправления');
+ await page.locator('#nav-machines').click();await expect(page.locator('#machine-'+m.id)).toContainText('Нужна проверенная процедура исправления');
  await page.locator('#nav-overview').click();await expect(retained).toHaveAttribute('data-work-phase','unconfirmed');
  await expect(retained).toContainText('Нужна проверенная процедура исправления');await expect(retained).toContainText('17 Linux-проверок');
  await page.locator('#nav-hermes').click();await expect(page.locator('#hermes-incidents')).toContainText('Нужна проверенная процедура исправления');await page.locator('#nav-overview').click();
