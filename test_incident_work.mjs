@@ -22,7 +22,7 @@ assert.equal(rows.find(r=>r.record_id==='machine-node').source_state,'open');
 const staleItem={...item,state:'needs_user',blocker:'owner_approval',decision:'Подтвердить?',condition_key:'source:stale',source_state:'unknown',source_at:new Date(now-7*864e5).toISOString()};
 assert.equal(incidentView({id:record.id,state:'unknown',condition_key:'source:stale'}, {...work,items:[staleItem]},now).lane,'hermes');
 
-const dead={...item,state:"accepted",source_state:"open",execution_state:"running",execution_liveness:"not_live"};
+const dead={...item,state:"accepted",source_state:"open",blocker:'none',decision:null,execution_state:"running",execution_liveness:"not_live"};
 assert.match(incidentView(record,{...work,items:[dead]},now).label,/остановился/);
 const infra={...dead,actor:'infra-dev',execution_state:'running',execution_liveness:'verified',state:'accepted'};
 assert.match(incidentView(record,{...work,items:[infra]},now).label,/infra-dev · владелец на связи/);
@@ -34,12 +34,12 @@ assert.match(stale.label,/Последняя запись/);assert.match(stale.b
 assert.equal(incidentView(record,{...work,items:[infra]},now,true).lane,'hermes');
 const {maintenanceWork}=await import('./release/web/cockpit-view.mjs');
 const clear={...record,state:'clear',condition_key:'state:observed_ok'};
-const preparation={...infra,state:'accepted',source_state:'clear',execution_state:'running',execution_liveness:'verified'};
+const preparation={...infra,state:'accepted',source_state:'clear',blocker:'none',execution_state:'running',execution_liveness:'verified'};
 assert.match(maintenanceWork(clear,{...work,items:[preparation]},now).label,/infra-dev/);
 assert.equal(maintenanceWork({...clear,state:'open'},{...work,items:[preparation]},now),null);
 assert.match(maintenanceWork(clear,{...work,items:[{...preparation,actor:'ops'}]},now).label,/процесс подтверждён/);
 assert.equal(maintenanceWork(clear,{...work,items:[{...preparation,actor:undefined,state:'waiting'}]},now).label,'ops · ожидание');
-assert.equal(maintenanceWork(clear,{...work,items:[{...preparation,state:'resolved'}]},now),null);
+assert.equal(maintenanceWork(clear,{...work,items:[{...preparation,state:'resolved'}]},now).phase,'recovered');
 assert.equal(maintenanceWork(clear,{...work,items:[{...preparation,state:'needs_user',blocker:'owner_approval',decision:'Подтвердить?'}]},now),null);
 assert.match(maintenanceWork(clear,{...work,items:[preparation]},now+1801e3).label,/Последняя запись/);
 
@@ -66,3 +66,28 @@ const oldDecisionGap=incidentView(gapRecord,{...work,items:[oldDecision]},now);
 assert.equal(oldDecisionGap.item,null);assert.equal(oldDecisionGap.lane,'hermes');
 assert.deepEqual(Object.keys(oldDecisionGap.preparation).sort(),['at','label']);
 assert.equal(incidentView(gapRecord,{status:'unavailable',items:[historyItem]},now).preparation,null);
+
+// Queue, live execution and a live supervisor waiting on a blocker are different states.
+assert.equal(incidentView(record,work,now).phase,'unconfirmed','a changed source cannot confirm the old owner request');
+const queued={...dead,state:'queued',execution_state:'unknown',execution_liveness:'unverified'};
+assert.equal(incidentView(record,{...work,items:[queued]},now).phase,'queued');
+const live={...dead,blocker:'none',execution_liveness:'verified'};
+assert.equal(incidentView(record,{...work,items:[live]},now).phase,'active');
+const blocked=incidentView(record,{...work,items:[{...live,blocker:'awaiting_source'}]},now);
+assert.equal(blocked.phase,'waiting','a live supervisor does not erase a recorded technical stop');
+assert.equal(blocked.blocker,'Нет свежих данных источника');
+assert.equal(incidentView(record,{...work,items:[live]},now+121e3).phase,'unconfirmed');
+assert.equal(incidentView(record,{...work,items:[dead]},now).phase,'interrupted');
+const changed=incidentView({...record,condition_key:'service:critical'},{...work,items:[{...live,blocker:'no_safe_procedure'}]},now);
+assert.equal(changed.phase,'unconfirmed');assert.equal(changed.item,null);
+assert.equal(changed.history.blocker,'Нужна проверенная процедура исправления');
+assert.equal(incidentView({...record,unconfirmed:true},{...work,items:[live]},now).phase,'unconfirmed');
+const recovered={...preparation,state:'resolved',action:'verify_recovery',source_at:stamp};
+assert.equal(maintenanceWork(clear,{...work,items:[recovered]},now).phase,'recovered');
+assert.equal(maintenanceWork(clear,{...work,items:[recovered]},now+1801e3).phase,'unconfirmed');
+const {reconcile}=await import('./release/web/cockpit-view.mjs');
+const last=incidentView(record,{...work,items:[{...live,state:'waiting',blocker:'no_safe_procedure'}]},now);
+const retained=reconcile(new Map([[record.id,{...record,work:last}]]),[record]).get(record.id);
+const missing=incidentView(retained,{status:'unavailable',items:[],observed_at:stamp},now);
+assert.equal(missing.phase,'unconfirmed');assert.equal(missing.item,null);
+assert.equal(missing.history.blocker,'Нужна проверенная процедура исправления','missing metadata retains the last stop only as history');

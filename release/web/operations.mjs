@@ -7,7 +7,7 @@ const $=id=>document.getElementById(id), el=(tag,text,cls)=>{const n=document.cr
 const amount=(n,unit)=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:unit==='credits'?0:2}).format(n)+(unit==='credits'?' кр.':' $');
 const kinds={physical:'Сервер',physical_mac:'Mac',cloud_vm:'Облачная VM',virtual_machine:'VM',wsl_guest:'WSL',managed_kubernetes_node:'Узел Kubernetes',physical_router:'Роутер',services:'Приложения и бэкапы',unknown:'Тип не подтверждён'};
 const pages={overview:'Мостик',courts:'Суды',subscriptions:'Подписки',balances:'Балансы',machines:'Машины',hermes:'Hermes',evidence:'Доказательства'};
-let latest=null;
+let latest=null,machineWork=new Map();
 export function initNavigation(){
  function show(){
   const route=location.hash.slice(1).split('/')[0],page=Object.hasOwn(pages,route)?route:'overview';
@@ -74,12 +74,14 @@ function machineCard(m,now,open,transportError,work){
   card.append(el('p',`Батарея: ${battery.fresh?'замер':'проверка'} ${relativeTime(battery.at,now)}`,'muted small'));
  }
  card.append(el('p',m.message,'resource-message'));
- const record={id:'machine-'+m.id,condition_key:machineCondition(m),state:m.tone==='ok'?'clear':['critical','warning'].includes(m.tone)?'open':'unknown'};
+ const record={id:'machine-'+m.id,condition_key:machineCondition(m),state:m.tone==='ok'?'clear':['critical','warning'].includes(m.tone)?'open':'unknown',work:machineWork.get('machine-'+m.id)};
  const stage=m.tone==='ok'?maintenanceWork(record,work,now,transportError):incidentView(record,work,now,transportError);
+ if(stage)machineWork.set(record.id,stage);else machineWork.delete(record.id);
  if(stage){
   card.append(el('p','Hermes: '+stage.label,'small'));
-  if(stage.action)card.append(el('p','Последний этап: '+stage.action,'small'));
+  if(stage.action)card.append(el('p','Последний этап: '+stage.action+(stage.at?' · '+relativeTime(stage.at,now):''),'small'));
   if(stage.blocker)card.append(el('p',stage.blocker,'small'));
+  if(stage.history){const h=stage.history;card.append(el('p','Ранее: '+h.action+' · '+relativeTime(h.at,now)+(h.blocker?' · '+h.blocker:''),'muted small'));}
   if(stage.preparation)card.append(el('p',stage.preparation.label+' · '+relativeTime(stage.preparation.at,now),'small'));
   if(stage.lane==='owner')card.append(el('p','Нужно от вас: '+stage.item.decision,'small'));
  }
@@ -116,6 +118,7 @@ export function renderOperations(snapshot,transportError,now){
  renderMail(snapshot?.mail_subscriptions,now,transportError);
  latest=[snapshot,transportError,now];observation(...latest);
  const ops=snapshot?.operations,balances=sortedBalances(ops,now,transportError),machines=sortedMachines(ops,now,transportError);
+ if(ops?.fleet?.status==='ok')machineWork=new Map(machines.map(m=>['machine-'+m.id,machineWork.get('machine-'+m.id)]));
  const open=new Set([...document.querySelectorAll('details[data-operation][open]')].map(n=>n.dataset.operation));
  const balancesRoot=$('balances');balancesRoot.replaceChildren(...balances.map(b=>balanceCard(b,now,open)));
  const machineRoot=$('machines');machineRoot.replaceChildren(...machines.map(m=>machineCard(m,now,open,transportError,snapshot?.cockpit?.work)));

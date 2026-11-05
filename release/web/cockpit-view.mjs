@@ -15,7 +15,7 @@ export function reconcile(previous,records,retired=[]){
   const old=previous.get(r.id);
   if(r.state==='clear'||r.state==='retired'||retired.includes(r.entity))continue;
   if(r.state==='unknown'){if(old)result.set(r.id,{...old,unconfirmed:true});continue;}
-  result.set(r.id,{...r,revision:revision(r),unconfirmed:false});
+  result.set(r.id,{...(old?.work?{work:old.work}:{}),...r,revision:revision(r),unconfirmed:false});
  }
  return result;
 }
@@ -63,7 +63,11 @@ export function overview(snapshot,accounts,resources,now=Date.now(),transportErr
   ['Будущие заседания',c.confirmed_dates_available?'Есть структурированные подтверждения':'Подтверждённый список недоступен']]:[['Источник','Не подключён или не прошёл проверку']];
  add({id:'court-coverage',domain:'courts',title:'Проверка судов: '+(c?.status==='ok'?'охват подтверждён':'охват неполный'),state:courtFresh?(c.status==='ok'?'clear':c.status==='unavailable'?'unknown':'open'):'unknown',tone:'warning',reason:JSON.stringify(['court-coverage',c?.status,c?.search_status,c?.unverified,c?.carried_forward]),owner:'Ответственный не подтверждён',observedAt:c?.observed_at,
   detail:'Непроверено: '+count(c?.unverified)+' · перенесено: '+count(c?.carried_forward)+'. Это полнота данных, не оценка юридического риска.',evidence:courtFacts,next:'Открыть судебную сводку'});
- const tasks=(data?.tasks||[]).map(t=>({...t,active:cockpitFresh&&freshAt(t.observed_at,now,120)&&['running','claimed'].includes(t.state)&&t.liveness==='verified',fresh:coverageFresh&&freshAt(t.observed_at,now,1800)})).sort((a,b)=>Number(b.active)-Number(a.active)||(Date.parse(b.claimed_at)||0)-(Date.parse(a.claimed_at)||0));
+ const tasks=(data?.tasks||[]).map(t=>{
+  const fresh=coverageFresh&&freshAt(t.observed_at,now,1800),active=cockpitFresh&&freshAt(t.observed_at,now,120)&&['running','claimed'].includes(t.state)&&t.liveness==='verified';
+  const phase=!fresh?'unconfirmed':active?'active':['running','claimed'].includes(t.state)?t.liveness==='not_live'?'interrupted':'unconfirmed':({planned:'queued',paused:'waiting',failed:'interrupted',completed:'result'}[t.state]||'unconfirmed');
+  return {...t,active,fresh,phase};
+ }).sort((a,b)=>Number(b.active)-Number(a.active)||(Date.parse(b.claimed_at)||0)-(Date.parse(a.claimed_at)||0));
  const nextRuns=new Set();
  for(const t of tasks){
   if(t.state==='failed'||t.state==='completed')add({id:'job-result-'+(t.job_key||t.id)+'-'+t.origin,domain:'hermes',title:t.label+' · '+(t.origin==='scheduled'?'плановый запуск':'ручной запуск'),state:t.fresh?(t.state==='failed'?'open':'clear'):'unknown',tone:'warning',reason:'execution-failed-'+t.id,condition_key:'execution:'+t.id,owner:'Профиль '+t.profile,observedAt:t.finished_at||t.observed_at,detail:'Сохранён результат процесса: '+(t.state==='failed'?'ошибка':'завершён')+'. Ручной повтор не заменяет результат планового запуска.',evidence:[['Профиль',t.profile],['Источник запуска',t.origin],['Результат',t.state],['Завершение',dateLabel(t.finished_at)]],next:'Посмотреть результат запуска'});
@@ -85,37 +89,54 @@ export function overview(snapshot,accounts,resources,now=Date.now(),transportErr
 
 export const workActions={diagnose:'Разбор причины',check_access:'Проверка существующего доступа',inspect_disk:'Анализ занятого места',inspect_service:'Диагностика служб',inspect_backup:'Проверка резервных копий',prepare_fix:'Подготовка исправления',test_fix:'Проверка исправления',verify_recovery:'Проверка восстановления',wait_supervisor:'Проверка штатного восстановления',wait_reset:'Ожидание сброса квоты',check_balance:'Проверка баланса',check_job:'Разбор неудачного запуска',check_source:'Проверка источника данных'};
 export const workBlockers={none:null,no_access:'Нет подтверждённого доступа',no_safe_procedure:'Нужна проверенная процедура исправления',active_work:'На машине идёт работа',awaiting_source:'Нет свежих данных источника',upstream:'Внешний сервис недоступен',execution_failed:'Запуск завершился с ошибкой',login_required:'Нужен вход владельца',payment_required:'Нужна оплата',owner_approval:'Нужно решение владельца'};
+const phaseLabels={active:'В работе',queued:'В очереди',waiting:'Ожидание',interrupted:'Остановлено',unconfirmed:'Не подтверждено',owner:'Нужно ваше решение',result:'Результат процесса',recovered:'Восстановление проверено'};
+export function workSummary(stages){
+ const counts=new Map();for(const stage of stages)counts.set(stage.phase,(counts.get(stage.phase)||0)+1);
+ return Object.entries(phaseLabels).filter(([phase])=>phase==='active'||counts.has(phase)).map(([phase,label])=>label+': '+(counts.get(phase)||0)).join(' · ');
+}
 export function preparationLabel(item){
  const p=item?.preparation;if(!p)return null;
  return (p.current_occurrence?'Последний план':'План прошлого запуска')+': '+(p.status==='passed_conditional'?`${p.checks} Linux-проверок пройдено · план условный`:'проверки не пройдены');
 }
 export function incidentView(record,work,now=Date.now(),transportError=false){
  const item=work?.status==='ok'?work.items.find(w=>w.record_id===record.id&&w.preparation):null;
- return {...incidentStage(record,work,now,transportError),preparation:item?{label:preparationLabel(item),at:item.preparation.tested_at}:null};
+ const stage=incidentStage(record,work,now,transportError);
+ const previous=!stage.item?record.work?.preparation:null;
+ const preparation=item?{label:preparationLabel(item),at:item.preparation.tested_at}:previous?{...previous,label:previous.label.startsWith('Ранее')?previous.label:'Ранее · '+previous.label}:null;
+ return {...stage,active:stage.phase==='active',maintenance:stage.phase==='unconfirmed'&&record.work?.maintenance,at:stage.item?.updated_at,preparation};
 }
 function incidentStage(record,work,now,transportError){
  const key=record.condition_key||JSON.stringify([record.state,record.reason,record.value]);
  const item=work?.status==='ok'?work.items.find(w=>w.record_id===record.id&&w.condition_key===key&&(w.source_state===record.state||record.unconfirmed&&w.source_state==='unknown')):null;
- if(!item)return {lane:'hermes',label:'Передача ещё не подтверждена',action:null,blocker:'Нет актуальной записи ops по этой проблеме',item:null};
+ if(!item){
+  const previous=work?.status==='ok'?work.items.find(w=>w.record_id===record.id):null;
+  const history=previous?{action:workActions[previous.action],blocker:workBlockers[previous.blocker],at:previous.updated_at}:record.work?.item?{action:record.work.action,blocker:record.work.blocker,at:record.work.at}:record.work?.history;
+  return {lane:'hermes',phase:'unconfirmed',label:'Передача ещё не подтверждена',action:null,blocker:previous?'Запись ops относится к другому состоянию источника':'Нет актуальной записи ops по этой проблеме',item:null,observedAt:work?.observed_at,history};
+ }
  const action=workActions[item.action],blocker=workBlockers[item.blocker];
- if(transportError||!freshAt(work.observed_at,now,1800))return {lane:'hermes',label:'Последняя запись · текущее состояние не подтверждено',action,blocker,item,observedAt:work.observed_at};
- if(item.state==='queued')return {lane:'hermes',label:'Передано ops · ждёт разбора',action:null,blocker:null,item,observedAt:work.observed_at};
- if(item.state==='needs_user'&&record.state!=='clear'&&!record.unconfirmed&&freshAt(item.source_at,now,1800)&&['login_required','payment_required','owner_approval'].includes(item.blocker)&&item.decision)return {lane:'owner',label:'Нужно ваше решение',action,blocker,item,observedAt:work.observed_at};
- if(item.state==='resolved'&&item.source_state==='clear')return {lane:'hermes',label:'Восстановление проверено',action,blocker:null,item,observedAt:work.observed_at};
+ if(transportError||record.unconfirmed||!freshAt(work.observed_at,now,1800))return {lane:'hermes',phase:'unconfirmed',label:'Последняя запись · текущее состояние не подтверждено',action,blocker,item,observedAt:work.observed_at};
+ if(item.state==='queued')return {lane:'hermes',phase:'queued',label:'Передано ops · ждёт разбора',action:null,blocker:null,item,observedAt:work.observed_at};
+ if(item.state==='needs_user'&&record.state!=='clear'&&!record.unconfirmed&&freshAt(item.source_at,now,1800)&&['login_required','payment_required','owner_approval'].includes(item.blocker)&&item.decision)return {lane:'owner',phase:'owner',label:'Нужно ваше решение',action,blocker,item,observedAt:work.observed_at};
+ if(item.state==='resolved'&&item.source_state==='clear'&&!record.unconfirmed&&freshAt(item.source_at,now,1800))return {lane:'hermes',phase:'recovered',label:'Восстановление проверено',action,blocker:null,item,observedAt:work.observed_at};
  if(item.state==='accepted'){
   const live=item.execution_liveness==='verified'&&['claimed','running'].includes(item.execution_state)&&freshAt(work.observed_at,now,120);
-  return {lane:'hermes',label:live?(item.actor==='infra-dev'?'infra-dev · владелец на связи':'В работе · процесс подтверждён'):(['completed','failed'].includes(item.execution_state)||item.execution_liveness==='not_live')?'Запуск остановился без итога по проблеме':'Текущая работа не подтверждена',action,blocker:live?null:item.execution_state==='failed'?'Ошибка исполнения':blocker,item,observedAt:work.observed_at};
+  const stopped=['completed','failed'].includes(item.execution_state)||item.execution_liveness==='not_live';
+  const phase=live&&blocker?'waiting':live?'active':stopped?'interrupted':'unconfirmed';
+  return {lane:'hermes',phase,label:phase==='waiting'?'Ожидание · процесс владельца на связи':live?(item.actor==='infra-dev'?'infra-dev · владелец на связи':'В работе · процесс подтверждён'):stopped?'Запуск остановился без итога по проблеме':'Текущая работа не подтверждена',action,blocker:blocker|| (item.execution_state==='failed'?'Ошибка исполнения':null),item,observedAt:work.observed_at};
  }
- return {lane:'hermes',label:item.source_state==='clear'?'В новом замере проблема не видна':item.state==='needs_user'?'Нужно перепроверить запрос к владельцу':item.actor==='infra-dev'?'infra-dev · остановился':'Остановился · ожидание',action,blocker,item,observedAt:work.observed_at};
+ return {lane:'hermes',phase:item.state==='waiting'?'waiting':'unconfirmed',label:item.source_state==='clear'?'В новом замере проблема не видна':item.state==='needs_user'?'Нужно перепроверить запрос к владельцу':item.actor==='infra-dev'?'infra-dev · остановился':'Остановился · ожидание',action,blocker,item,observedAt:work.observed_at};
 }
 
 export function maintenanceWork(record,work,now=Date.now(),transportError=false){
- if(record.state!=='clear'||work?.status!=='ok')return null;
- const item=work.items.find(w=>w.record_id===record.id&&w.source_state==='clear'&&['accepted','waiting'].includes(w.state));
- if(!item)return null;
+ if(record.state!=='clear')return null;
+ const item=work?.status==='ok'?work.items.find(w=>w.record_id===record.id&&w.source_state==='clear'&&['accepted','waiting','resolved'].includes(w.state)):null;
+ if(!item){
+  if(!record.work?.maintenance)return null;
+  return {...incidentView(record,work,now,transportError),maintenance:true};
+ }
  // A healthy source can coexist with ongoing preparation; this is activity, not a new fault.
  const stage=incidentView({...record,condition_key:item.condition_key},work,now,transportError);
+ stage.maintenance=item.state!=='resolved';
  if(item.state==='waiting'&&!transportError&&freshAt(work.observed_at,now,1800))stage.label=(item.actor||'ops')+' · ожидание';
- stage.active=item.state==='accepted'&&!transportError&&freshAt(work.observed_at,now,120)&&item.execution_liveness==='verified'&&['claimed','running'].includes(item.execution_state);
  return stage;
 }
