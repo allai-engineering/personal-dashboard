@@ -114,7 +114,10 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  const expanded=decisions.filter(r=>!compact(r,seenForRows)),viewed=decisions.filter(r=>compact(r,seenForRows));
  const delegated=ordered.filter(r=>r.work.lane==='hermes');
  const gaps=view.records.filter(r=>r.state==='unknown'&&!active.has(r.id));
- for(const r of gaps){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.publishedAt=snapshot?.cockpit?.collected_at;r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
+ for(const previous of previousRegistry.values())if(previous.work?.maintenance&&!registry.has(opaque(previous.id))&&!view.retired.includes(previous.entity)){
+  const retained={...previous,state:'unknown',tone:'unknown',unconfirmed:true};gaps.push(retained);registry.set(opaque(retained.id),retained);
+ }
+ for(const r of gaps){r.work=incidentView({...r,work:previousRegistry.get(opaque(r.id))?.work},snapshot?.cockpit?.work,now,transportError);r.publishedAt=snapshot?.cockpit?.collected_at;r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
  for(const r of gaps.filter(r=>r.work.lane==='owner')){decisions.push(r);expanded.push(r);}
  delegated.push(...gaps.filter(r=>(r.work.item||r.work.history)&&r.work.lane==='hermes'));
  for(const r of view.records){

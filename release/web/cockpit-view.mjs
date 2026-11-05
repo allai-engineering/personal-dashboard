@@ -101,7 +101,9 @@ export function preparationLabel(item){
 export function incidentView(record,work,now=Date.now(),transportError=false){
  const item=work?.status==='ok'?work.items.find(w=>w.record_id===record.id&&w.preparation):null;
  const stage=incidentStage(record,work,now,transportError);
- return {...stage,active:stage.phase==='active',at:stage.item?.updated_at,preparation:item?{label:preparationLabel(item),at:item.preparation.tested_at}:null};
+ const previous=!stage.item?record.work?.preparation:null;
+ const preparation=item?{label:preparationLabel(item),at:item.preparation.tested_at}:previous?{...previous,label:previous.label.startsWith('Ранее')?previous.label:'Ранее · '+previous.label}:null;
+ return {...stage,active:stage.phase==='active',maintenance:stage.phase==='unconfirmed'&&record.work?.maintenance,at:stage.item?.updated_at,preparation};
 }
 function incidentStage(record,work,now,transportError){
  const key=record.condition_key||JSON.stringify([record.state,record.reason,record.value]);
@@ -130,8 +132,7 @@ export function maintenanceWork(record,work,now=Date.now(),transportError=false)
  const item=work?.status==='ok'?work.items.find(w=>w.record_id===record.id&&w.source_state==='clear'&&['accepted','waiting','resolved'].includes(w.state)):null;
  if(!item){
   if(!record.work?.maintenance)return null;
-  const stage=incidentView(record,work,now,transportError);
-  return {...stage,maintenance:true,preparation:stage.preparation||record.work.preparation&&{...record.work.preparation,label:record.work.preparation.label.startsWith('Ранее')?record.work.preparation.label:'Ранее · '+record.work.preparation.label}};
+  return {...incidentView(record,work,now,transportError),maintenance:true};
  }
  // A healthy source can coexist with ongoing preparation; this is activity, not a new fault.
  const stage=incidentView({...record,condition_key:item.condition_key},work,now,transportError);
