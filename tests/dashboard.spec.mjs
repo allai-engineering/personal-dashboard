@@ -1,12 +1,67 @@
 import {test,expect} from '@playwright/test';
 
+test('one owner queue counts mail and ops, preserves viewed work and durable decisions',async({page,browser},testInfo)=>{
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ const base=await(await page.request.get('/api/snapshot')).json(),now=new Date().toISOString();
+ base.accounts=base.accounts.filter(a=>a.id==='low');base.cockpit.work.items=base.cockpit.work.items.filter(w=>w.record_id.includes('low'));
+ const id=(testInfo.project.name==='mobile'?'e':'f').repeat(32);
+ const mail={id,service:'excalidraw',kind:'renewal',state:'needs_user',deadline:null,confidence:'supported_notice',blocker:'owner_decision',next_action:'review_renewal',owner:'user',observed_at:now,updated_at:now,last_operation:'evidence_verified',sources:['b'.repeat(32)]};
+ base.mail_secretary={schema:1,checked_at:now,run_state:'partial',stop_reason:'source_unavailable',pending:2,case_counts:{needs_user:1,waiting:1,done:0},omitted_cases:0,coverage:{ok:1,partial:0,unavailable:1,scope:'bounded_inbox_and_targeted'},cases:[mail,{...mail,id:'9'.repeat(32),kind:'waiting_reply',state:'waiting'}],operations:[]};
+ const serve=async route=>{const actual=await route.fetch();await route.fulfill({json:{...base,mail_control:(await actual.json()).mail_control}});};
+ await page.route(/\/api\/(snapshot|refresh)$/,serve);await page.locator('#refresh').click();
+ const queue=page.locator('#cockpit-decisions'),mailCard=()=>queue.locator('[data-mail-case="'+id+'"]');
+ await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 2');
+ await expect(queue).toContainText('Excalidraw');await expect(queue).toContainText('low@example.test');
+ await expect(page.locator('#cockpit-coverage')).toContainText('охват');
+ await expect(page.locator('#mail-secretary')).not.toContainText('к решению');
+ await expect(page.locator('#mail-secretary [data-mail-case="'+id+'"]')).toHaveCount(0);
+ await queue.locator('.cockpit-row').filter({hasText:'low@example.test'}).locator('a').click();await page.locator('#evidence-back').click();
+ await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 2');
+ const attempts=[];let fail;
+ await page.route('**/api/mail-secretary/action',async route=>{attempts.push(route.request().postDataJSON());await new Promise(resolve=>{fail=resolve;});await route.fulfill({status:attempts.length===1?503:409,json:{error:'decision_conflict'}});});
+ await mailCard().getByRole('button',{name:'Уже решено',exact:true}).click();
+ await expect(mailCard().getByRole('status')).toHaveText('Сохраняем…');await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 2');
+ await expect.poll(()=>!!fail).toBe(true);fail();await expect(mailCard().getByRole('status')).toContainText('Не удалось подтвердить');
+ fail=null;await mailCard().getByRole('button',{name:'Уже решено',exact:true}).click();await expect.poll(()=>!!fail).toBe(true);fail();
+ await expect(mailCard().getByRole('status')).toContainText('другой вкладке');expect(attempts[1].request_id).toBe(attempts[0].request_id);
+ await page.unroute('**/api/mail-secretary/action');
+ await mailCard().getByRole('button',{name:'Напомнить',exact:true}).click();
+ const day=new Date(Date.now()+3*86400000).toISOString().slice(0,10);
+ await mailCard().getByLabel('Дата напоминания (Стамбул)').fill(day);await mailCard().getByRole('button',{name:'Сохранить дату'}).click();
+ await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 1');
+ await page.reload();await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 1');
+ const later=page.locator('#mail-secretary [data-mail-case="'+id+'"]');await later.locator('summary').first().click();
+ await later.getByRole('button',{name:'Уже решено',exact:true}).click();await expect(later).toContainText('Вы отметили дело решённым');
+ const other=await browser.newContext({storageState:await page.context().storageState()});
+ const second=await other.newPage();await second.route(/\/api\/(snapshot|refresh)$/,serve);await second.goto('/');
+ await expect(second.locator('#cockpit-count')).toHaveText('Известных решений: 1');
+ const resolved=second.locator('#mail-secretary [data-mail-case="'+id+'"]');await resolved.locator('summary').first().click();await expect(resolved).toContainText('Вы отметили дело решённым');await other.close();
+ await page.screenshot({path:testInfo.outputPath('owner-decisions.png'),fullPage:true});
+});
+
+test('owner ordering uses confirmed urgency and dates without duplicate or false all-clear',async({page})=>{
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ const body=await(await page.request.get('/api/snapshot')).json(),now=new Date().toISOString();
+ const mail={id:'3'.repeat(32),service:'google',kind:'reply',state:'needs_user',deadline:'2026-11-10',confidence:'supported_notice',blocker:'owner_decision',next_action:'review_reply',owner:'user',observed_at:now,updated_at:now,last_operation:'evidence_verified',sources:['b'.repeat(32)]};
+ body.mail_secretary={schema:1,checked_at:now,run_state:'partial',stop_reason:'backlog',pending:0,case_counts:{needs_user:3,waiting:0,done:0},omitted_cases:1,coverage:{ok:1,partial:0,unavailable:0,scope:'bounded_inbox_and_targeted'},cases:[mail,{...mail,id:'4'.repeat(32),deadline:'2026-11-07'},mail],operations:[]};
+ body.mail_control={available:true,decisions:{}};
+ await page.route('**/api/refresh',r=>r.fulfill({json:body}));await page.locator('#refresh').click();
+ const entries=page.locator('#cockpit-decisions').locator(':scope > *');
+ await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 4');
+ await expect(entries.nth(0)).toContainText('critical@example.test');await expect(entries.nth(1)).toContainText('2026-11-07');await expect(entries.nth(2)).toContainText('2026-11-10');await expect(entries.nth(3)).toContainText('low@example.test');
+ await expect(page.locator('#cockpit-coverage')).toContainText('не вошла в снимок');
+ body.mail_secretary=null;body.mail_control={available:false,decisions:{}};body.cockpit.work.items=[];
+ await page.locator('#refresh').click();await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 0');
+ await expect(page.locator('#cockpit-decisions')).toContainText('Полнота списка не подтверждена');await expect(page.locator('#cockpit-coverage')).toContainText('Нет свежего подтверждения почтовых дел');
+});
+
 test('mail secretary shows real case states and expires a stopped run',async({page},testInfo)=>{
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
  const body=await (await page.request.get('/api/snapshot')).json();const now=new Date().toISOString();
  body.mail_secretary={schema:1,checked_at:now,run_state:'partial',stop_reason:'backlog',pending:3,case_counts:{needs_user:1,waiting:0,done:0},omitted_cases:0,coverage:{ok:3,partial:1,unavailable:0,scope:'bounded_inbox_and_targeted'},cases:[{id:'a'.repeat(32),service:'excalidraw',kind:'renewal',state:'needs_user',deadline:'2026-11-09',confidence:'supported_notice',blocker:'owner_decision',next_action:'review_notice',owner:'user',observed_at:now,updated_at:now,last_operation:'evidence_verified',sources:['b'.repeat(32)]}],operations:[{action:'targeted_search',ref:'b'.repeat(32),outcome:'ok',at:now}]};
  await page.route('**/api/refresh',r=>r.fulfill({json:body}));await page.locator('#refresh').click();
- const section=page.locator('#mail-secretary');await expect(section).toContainText('Другие дела');await expect(section).toContainText('Автоматическая проверка');
- await section.locator('summary').filter({hasText:'Excalidraw'}).click();await expect(section).toContainText('2026-11-09');await expect(section).toContainText('не текущее состояние сервиса');
+ const section=page.locator('#mail-secretary'),card=page.locator('#cockpit-decisions [data-mail-case]');await expect(card).toContainText('Excalidraw');await expect(section).toContainText('Автоматическая проверка');
+ await expect(card).toContainText('2026-11-09');await expect(card).toContainText('не текущее состояние сервиса');
  await section.locator('summary').filter({hasText:'Подробнее'}).click();await expect(section).toContainText('Точечный поиск по отправителю');
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
  await page.screenshot({path:testInfo.outputPath('mail-secretary.png'),fullPage:true});
@@ -18,9 +73,9 @@ test('mail owner decisions persist on reload and evidence stays inert',async({pa
  const base=await(await page.request.get('/api/snapshot')).json();const now=new Date().toISOString();const id=(testInfo.project.name==='mobile'?'c':'d').repeat(32);
  base.mail_secretary={schema:1,checked_at:now,run_state:'partial',stop_reason:'backlog',pending:20,case_counts:{needs_user:1,waiting:0,done:0},omitted_cases:0,coverage:{ok:0,partial:4,unavailable:0,scope:'bounded_inbox_and_targeted'},cases:[{id,service:'excalidraw',kind:'renewal',state:'needs_user',deadline:'2026-11-09',confidence:'supported_notice',blocker:'owner_decision',next_action:'review_renewal',owner:'user',observed_at:now,updated_at:now,last_operation:'evidence_verified',sources:['b'.repeat(32)]}],operations:[]};
  await page.route(/\/api\/(snapshot|refresh)$/,async route=>{const actual=await route.fetch();const control=(await actual.json()).mail_control;await route.fulfill({json:{...base,mail_control:control}});});
- await page.locator('#refresh').click();const section=page.locator('#mail-secretary');await section.locator('summary').filter({hasText:'Excalidraw'}).click();
- await section.getByRole('button',{name:'Показать доказательства'}).click();await expect(section.locator('blockquote')).toContainText('<script>untrusted</script>');await expect(section.locator('script')).toHaveCount(0);
- await section.getByRole('button',{name:'Разобраться',exact:true}).click();await expect(section).toContainText('в очереди ближайшего ежедневного запуска');
+ await page.locator('#refresh').click();const section=page.locator('#mail-secretary'),card=page.locator('#cockpit-decisions [data-mail-case]');
+ await card.getByRole('button',{name:'Показать доказательства'}).click();await expect(card.locator('blockquote')).toContainText('<script>untrusted</script>');await expect(card.locator('script')).toHaveCount(0);
+ await card.getByRole('button',{name:'Разобраться',exact:true}).click();await expect(section).toContainText('в очереди ближайшего ежедневного запуска');
  await page.reload();await expect(section).toContainText('Другие дела');await section.locator('summary').filter({hasText:'Excalidraw'}).click();await expect(section).toContainText('в очереди ближайшего ежедневного запуска');
  await section.getByRole('button',{name:'Напомнить',exact:true}).click();const day=new Date(Date.now()+3*86400000).toISOString().slice(0,10);await section.getByLabel('Дата напоминания (Стамбул)').fill(day);await section.getByRole('button',{name:'Сохранить дату'}).click();await expect(section).toContainText('До этой даты дело отложено');
  await section.getByRole('button',{name:'Уже решено',exact:true}).click();await expect(section).toContainText('Вы отметили дело решённым');
@@ -238,12 +293,12 @@ test('reply queues show cancellation and dated history without losing new remind
  body.mail_secretary={schema:1,checked_at:now,run_state:'partial',stop_reason:'backlog',pending:2,case_counts:{needs_user:1,waiting:1,done:0},omitted_cases:0,coverage:{ok:1,partial:1,unavailable:0,scope:'bounded_inbox_and_targeted'},cases:[{...row,id:first,kind:'reply_needed',state:'needs_user'},{...row,id:second,kind:'waiting_reply',state:'waiting'}],operations:[]};
  body.mail_control={available:true,decisions:{[first]:{action:'remind',status:'cancelled',reason:'reply_received',request_id:'a'.repeat(32),at:now,remind_on:'2026-11-09'}},queue_counts:{reply_needed:1,waiting_reply:1,other:0,snoozed:0,done:0},queues:{[first]:'reply_needed',[second]:'waiting_reply'}};
  await page.route(/\/api\/(snapshot|refresh)$/,r=>r.fulfill({json:body}));await page.locator('#refresh').click();
- const section=page.locator('#mail-secretary'),card=section.locator('.mail-reply_needed details').first();await card.locator('summary').first().click();
- await expect(section.locator('.mail-reply_needed .mail-count')).toHaveText('1');await expect(section.locator('.mail-waiting_reply .mail-count')).toHaveText('1');
+ const section=page.locator('#mail-secretary'),card=page.locator('#cockpit-decisions [data-mail-case="'+first+'"]');
+ await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 3');await expect(section.locator('.mail-waiting_reply .mail-count')).toHaveText('1');
  await expect(card).toContainText('Напоминание отменено: получен ответ');
  await card.getByText('История дела',{exact:true}).click();await card.getByRole('button',{name:'Показать историю'}).click();await expect(card.locator('.mail-timeline li')).toHaveCount(2);await expect(card).toContainText('Источник cccccccc');
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
  await section.screenshot({path:testInfo.outputPath('mail-v3-history.png')});
  body.mail_control.decisions[first]={...body.mail_control.decisions[first],status:'snoozed',request_id:'f'.repeat(32)};body.mail_control.queues[first]='snoozed';body.mail_control.queue_counts.reply_needed=0;body.mail_control.queue_counts.snoozed=1;
- await page.locator('#refresh').click();await expect(section.locator('.mail-snoozed')).toContainText('До этой даты дело отложено');await expect(section.locator('.mail-reply_needed .mail-count')).toHaveText('0');
+ await page.locator('#refresh').click();await expect(section.locator('.mail-snoozed')).toContainText('До этой даты дело отложено');await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 2');await expect(section.locator('.mail-reply_needed')).toHaveCount(0);
 });
