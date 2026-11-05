@@ -1,5 +1,44 @@
 import {test,expect} from '@playwright/test';
 
+test('seven-day owner dates retain their role, sources and canonical reminders across Istanbul midnight',async({page},testInfo)=>{
+ await page.clock.install({time:new Date('2026-11-05T20:59:30Z')});
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ await expect(page.locator('#cockpit-events')).not.toBeEmpty();
+ const body=await(await page.request.get('/api/snapshot')).json(),stamp='2026-11-05T20:55:00Z',id='a'.repeat(32);
+ body.observed_at_utc=stamp;body.accounts=[body.accounts[0]];
+ body.accounts[0].quota={observed_at:stamp,windows:[{slot:'primary_window',window_minutes:300,remaining_percent:70,reset_at:'2026-11-05T21:30:00Z'}]};
+ body.mail_subscriptions={schema:1,checked_at:stamp,coverage:[{mailbox:'google-test',status:'partial',checked_at:stamp,history_complete:false}],records:[{id,service:'example.test',amount:null,currency:null,amount_kind:'unknown',renewal_date:'2026-11-06',status:'observed',sources:[{mailbox:'google-test',ref:'b'.repeat(32),date:stamp,url:null,fields:['renewal']}]}]};
+ body.mail_secretary={schema:1,checked_at:stamp,run_state:'partial',stop_reason:'backlog',pending:0,case_counts:{needs_user:1,waiting:0,done:0},omitted_cases:0,coverage:{ok:0,partial:1,unavailable:0,scope:'bounded_inbox_and_targeted'},cases:[{id,service:'excalidraw',kind:'reply_needed',state:'needs_user',deadline:null,confidence:'supported_notice',blocker:'owner_decision',next_action:'review_reply',owner:'user',observed_at:stamp,updated_at:stamp,last_operation:'evidence_verified',sources:['b'.repeat(32)]}],operations:[]};
+ body.mail_control={available:true,decisions:{[id]:{action:'remind',status:'snoozed',request_id:'c'.repeat(32),at:stamp,remind_on:'2026-11-07'}}};
+ body.cockpit.collected_at=stamp;body.cockpit.events=[{id:'synthetic-hearing',title:'Synthetic hearing',at:'2026-11-06',date_kind:'hearing',confirmed:true,observed_at:stamp,source:'Synthetic structured court record'},{id:'not-confirmed',title:'Unconfirmed mention',at:'2026-11-06',date_kind:'inferred',confirmed:false,observed_at:stamp,source:'Synthetic text'},{id:'outside',title:'Outside the window',at:'2026-11-14',date_kind:'hearing',confirmed:true,observed_at:stamp,source:'Synthetic court'}];
+ body.cockpit.tasks=[{...body.cockpit.tasks[0],label:'Synthetic internal collection',state:'planned',next_run_at:'2026-11-06T07:00:00Z',observed_at:stamp}];
+ const requests=[];page.on('request',r=>{const path=new URL(r.url()).pathname;if(path.startsWith('/api/'))requests.push(r.method()+' '+path);});
+ await page.route(/\/api\/(snapshot|refresh)$/,r=>r.fulfill({json:body}));await page.reload();
+ const events=page.locator('#cockpit-events'),renewal=events.locator('.cockpit-row').filter({has:page.getByRole('heading',{name:'example.test',exact:true})});
+ await expect(events.locator('.cockpit-row')).toHaveCount(4);
+ await expect(renewal).toContainText('Завтра');await expect(renewal).toContainText('2026-11-06');
+ await expect(renewal).toContainText('Сумма продления неизвестна');await expect(events).toContainText('не полный перечень');
+ await expect(events).not.toContainText('Synthetic internal collection');await expect(events).not.toContainText('Unconfirmed mention');await expect(events).not.toContainText('Outside the window');
+ await renewal.getByRole('link').click();
+ await expect(page.locator('#evidence-content')).toContainText('google-test');await expect(page.locator('#evidence-content')).toContainText('bbbbbbbb');
+ await expect(page.locator('#evidence-content')).toContainText('2026-11-06 · время не указано');
+ await expect(page.locator('#evidence-content')).toContainText('5 ноября в 23:55');await expect(page.locator('#evidence-content')).toContainText('не текущее состояние подписки');
+ await page.locator('#evidence-back').click();await expect(renewal).toBeFocused();
+ await page.clock.fastForward(60000);await page.locator('#refresh').click();await expect(page.locator('#refresh')).toBeEnabled();
+ await expect(renewal).toContainText('Сегодня');await expect(events.locator('.cockpit-row')).toHaveCount(4);
+ body.mail_control.decisions[id].status='cancelled';await page.locator('#refresh').click();await expect(events.locator('.cockpit-row')).toHaveCount(3);
+ Object.assign(body.mail_control.decisions[id],{status:'snoozed',request_id:'d'.repeat(32),remind_on:'2026-11-08'});
+ await page.locator('#refresh').click();await expect(events.locator('.cockpit-row')).toHaveCount(4);await expect(events).toContainText('2026-11-08');
+ await page.locator('#nav-hermes').click();await page.locator('#hermes-tasks .cockpit-row').filter({hasText:'Synthetic internal collection'}).getByRole('link').click();
+ await expect(page.locator('#evidence-content')).toContainText('Следующий плановый запуск');await expect(page.locator('#evidence-content')).toContainText('6 ноября в 10:00');
+ await page.locator('#nav-overview').click();
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ await events.screenshot({path:testInfo.outputPath('owner-dates.png')});
+ expect(requests.every(r=>r==='GET /api/snapshot'||r==='GET /api/refresh')).toBe(true);
+ body.accounts=[];body.mail_subscriptions.checked_at='2026-11-01T00:00:00Z';body.mail_control.available=false;body.cockpit.events=[];
+ await page.locator('#refresh').click();await expect(events).toContainText('Это не означает отсутствие сроков');await expect(events.locator('.cockpit-row')).toHaveCount(0);
+});
+
 test('mail secretary shows real case states and expires a stopped run',async({page},testInfo)=>{
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
  const body=await (await page.request.get('/api/snapshot')).json();const now=new Date().toISOString();

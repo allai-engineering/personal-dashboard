@@ -1,6 +1,9 @@
 import {freshAt,machineCondition} from './operations-view.mjs';
 import {dateLabel,windowLabel} from './account-view.mjs';
+import {mailView} from './mail-subscriptions.mjs';
+import {caseQueue} from './mail-secretary.mjs';
 const count=n=>Number.isInteger(n)&&n>=0?String(n):'неизвестно';
+const calendarDay=ms=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Istanbul',year:'numeric',month:'2-digit',day:'2-digit'}).format(ms);
 export function opaque(value){
  let hash=14695981039346656037n;
  for(const char of String(value)){hash^=BigInt(char.codePointAt(0));hash=BigInt.asUintN(64,hash*1099511628211n);}
@@ -24,6 +27,18 @@ export const compact=(record,seen)=>record.tone!=='critical'&&!record.unconfirme
 
 export function overview(snapshot,accounts,resources,now=Date.now(),transportError=false){
  const records=[],events=[],retired=[];
+ for(const r of mailView(snapshot?.mail_subscriptions,now,transportError).rows){
+  const sources=r.sources.filter(s=>s.fields?.includes('renewal')&&snapshot.mail_subscriptions.coverage.some(c=>c.mailbox===s.mailbox&&['ok','partial'].includes(c.status)&&freshAt(c.checked_at,now,90000)));
+  if(r.stale||r.status==='cancelled'||!r.renewal_date||!sources.length)continue;
+  events.push({id:'renewal-'+r.id,title:r.service,at:r.renewal_date,dateOnly:true,kind:'Продление по уведомлению',source:'Почтовое уведомление · '+sources.map(s=>s.mailbox+' / '+s.ref.slice(0,8)).join(', '),observedAt:sources.reduce((latest,s)=>s.date>latest?s.date:latest,''),
+   detail:(r.amount_kind==='next_charge'&&r.amount!==null?'Сумма из уведомления: '+r.amount+' '+r.currency:'Сумма продления неизвестна')+'. Письмо подтверждает указанную дату, а не текущее состояние подписки.'});
+ }
+ const control=snapshot?.mail_control;
+ if(!transportError&&control?.available)for(const r of snapshot?.mail_secretary?.cases||[]){
+  const d=control.decisions?.[r.id],queue=caseQueue(r,d);
+  if(d?.action!=='remind'||!['snoozed','due'].includes(d.status)||!d.remind_on||queue==='done'||control.queues?.[r.id]&&control.queues[r.id]!==queue)continue;
+  events.push({id:'reminder-'+r.id,title:'Напоминание: '+(r.service==='unknown'?'Почтовое дело':r.service),at:d.remind_on,dateOnly:true,kind:'Ваше напоминание',source:'Сохранённое решение по почтовому делу · '+r.id.slice(0,8),observedAt:d.at,detail:'Выбранная вами дата; это не срок оплаты или процессуальный срок.'});
+ }
  const add=r=>records.push({owner:'Вы',value:null,observedAt:null,reason:r.id,evidence:[],...r});
  for(const {account:a,view:v}of accounts){
   const entity='account:'+a.id,name=a.login||a.label,observed=a.source_observed_at||snapshot?.observed_at_utc;
@@ -64,18 +79,17 @@ export function overview(snapshot,accounts,resources,now=Date.now(),transportErr
  add({id:'court-coverage',domain:'courts',title:'Проверка судов: '+(c?.status==='ok'?'охват подтверждён':'охват неполный'),state:courtFresh?(c.status==='ok'?'clear':c.status==='unavailable'?'unknown':'open'):'unknown',tone:'warning',reason:JSON.stringify(['court-coverage',c?.status,c?.search_status,c?.unverified,c?.carried_forward]),owner:'Ответственный не подтверждён',observedAt:c?.observed_at,
   detail:'Непроверено: '+count(c?.unverified)+' · перенесено: '+count(c?.carried_forward)+'. Это полнота данных, не оценка юридического риска.',evidence:courtFacts,next:'Открыть судебную сводку'});
  const tasks=(data?.tasks||[]).map(t=>({...t,active:cockpitFresh&&freshAt(t.observed_at,now,120)&&['running','claimed'].includes(t.state)&&t.liveness==='verified',fresh:coverageFresh&&freshAt(t.observed_at,now,1800)})).sort((a,b)=>Number(b.active)-Number(a.active)||(Date.parse(b.claimed_at)||0)-(Date.parse(a.claimed_at)||0));
- const nextRuns=new Set();
  for(const t of tasks){
   if(t.state==='failed'||t.state==='completed')add({id:'job-result-'+(t.job_key||t.id)+'-'+t.origin,domain:'hermes',title:t.label+' · '+(t.origin==='scheduled'?'плановый запуск':'ручной запуск'),state:t.fresh?(t.state==='failed'?'open':'clear'):'unknown',tone:'warning',reason:'execution-failed-'+t.id,condition_key:'execution:'+t.id,owner:'Профиль '+t.profile,observedAt:t.finished_at||t.observed_at,detail:'Сохранён результат процесса: '+(t.state==='failed'?'ошибка':'завершён')+'. Ручной повтор не заменяет результат планового запуска.',evidence:[['Профиль',t.profile],['Источник запуска',t.origin],['Результат',t.state],['Завершение',dateLabel(t.finished_at)]],next:'Посмотреть результат запуска'});
-  if(t.enabled===true&&t.fresh&&t.next_run_at&&!nextRuns.has(t.job_key||t.id)){
-   nextRuns.add(t.job_key||t.id);events.push({id:'job-next-'+(t.job_key||t.id),title:t.label,at:t.next_run_at,kind:'Запланирован запуск · '+t.profile,source:'Сохранённое расписание Hermes',observedAt:t.observed_at});
-  }
  }
- for(const e of data?.events||[])if(coverageFresh&&e.confirmed&&e.date_kind!=='inferred'&&freshAt(e.observed_at,now,129600))events.push({id:e.id,title:e.title,at:e.at,kind:{hearing:'Заседание',confirmed_deadline:'Подтверждённый срок',publication:'Дата публикации'}[e.date_kind],source:e.source,observedAt:e.observed_at,dateOnly:/^\d{4}-\d{2}-\d{2}$/.test(e.at)});
+ for(const e of data?.events||[])if(coverageFresh&&e.confirmed===true&&['hearing','confirmed_deadline','publication'].includes(e.date_kind)&&freshAt(e.observed_at,now,129600))events.push({id:'court-'+e.id,title:e.title,at:e.at,kind:{hearing:'Заседание',confirmed_deadline:'Подтверждённый срок',publication:'Дата публикации'}[e.date_kind],source:e.source,observedAt:e.observed_at,dateOnly:/^\d{4}-\d{2}-\d{2}$/.test(e.at)});
  return {records,retired,tasks,activeTasks:tasks.filter(t=>t.active),cockpitFresh,coverageFresh,courtFresh,courtFacts,court:c,profiles:data?.profiles||[],
   events:events.filter(e=>{
-   if(e.dateOnly){const day=ms=>new Date(ms+3*3600000).toISOString().slice(0,10);return e.at>=day(now)&&e.at<=day(now+7*86400000);}
+   if(e.dateOnly)return e.at>=calendarDay(now)&&e.at<=calendarDay(now+7*86400000);
    const at=Date.parse(e.at);return Number.isFinite(at)&&at>=now&&at<=now+7*86400000;
+  }).map(e=>{
+   const days=(Date.parse(e.dateOnly?e.at:calendarDay(Date.parse(e.at)))-Date.parse(calendarDay(now)))/86400000;
+   return {...e,when:days===0?'Сегодня':days===1?'Завтра':'Через '+days+' дн.'};
   }).sort((a,b)=>{
    const calendar=e=>e.dateOnly?e.at:new Date(Date.parse(e.at)+3*3600000).toISOString();
    return calendar(a).localeCompare(calendar(b));
