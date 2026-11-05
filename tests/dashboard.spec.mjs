@@ -29,6 +29,13 @@ test('seven-day owner dates retain their role, sources and canonical reminders a
  body.mail_control.decisions[id].status='cancelled';await page.locator('#refresh').click();await expect(events.locator('.cockpit-row')).toHaveCount(3);
  Object.assign(body.mail_control.decisions[id],{status:'snoozed',request_id:'d'.repeat(32),remind_on:'2026-11-08'});
  await page.locator('#refresh').click();await expect(events.locator('.cockpit-row')).toHaveCount(4);await expect(events).toContainText('2026-11-08');
+ Object.assign(body.mail_subscriptions.records[0],{amount:'20.00',currency:'USD',amount_kind:'next_charge'});
+ body.mail_subscriptions.records[0].sources.push({mailbox:'google-amount',ref:'e'.repeat(32),date:'2026-11-04T10:00:00Z',url:null,fields:['amount']});
+ body.mail_subscriptions.coverage.push({mailbox:'google-amount',status:'unavailable',checked_at:stamp,history_complete:false});
+ await page.locator('#refresh').click();await expect(renewal).toContainText('Сумма продления неизвестна');await expect(renewal).not.toContainText('20.00 USD');
+ body.mail_subscriptions.coverage[1].status='ok';await page.locator('#refresh').click();await expect(renewal).toContainText('20.00 USD');
+ await renewal.getByRole('link').click();await expect(page.locator('#evidence-content')).toContainText('Подтверждение: сумма');
+ await expect(page.locator('#evidence-content')).toContainText('eeeeeeee');await expect(page.locator('#evidence-content')).toContainText('4 ноября в 13:00');await page.locator('#evidence-back').click();
  await page.locator('#nav-hermes').click();await page.locator('#hermes-tasks .cockpit-row').filter({hasText:'Synthetic internal collection'}).getByRole('link').click();
  await expect(page.locator('#evidence-content')).toContainText('Следующий плановый запуск');await expect(page.locator('#evidence-content')).toContainText('6 ноября в 10:00');
  await page.locator('#nav-overview').click();
