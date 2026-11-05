@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('one owner queue counts mail and ops, preserves viewed work and durable decisions',async({page,browser},testInfo)=>{
+ await page.clock.install();
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
  const base=await(await page.request.get('/api/snapshot')).json(),now=new Date().toISOString();
  base.accounts=base.accounts.filter(a=>a.id==='low');base.cockpit.work.items=base.cockpit.work.items.filter(w=>w.record_id.includes('low'));
@@ -21,13 +22,20 @@ test('one owner queue counts mail and ops, preserves viewed work and durable dec
  await page.route('**/api/mail-secretary/action',async route=>{attempts.push(route.request().postDataJSON());await new Promise(resolve=>{fail=resolve;});await route.fulfill({status:attempts.length===1?503:409,json:{error:'decision_conflict'}});});
  await mailCard().getByRole('button',{name:'Уже решено',exact:true}).click();
  await expect(mailCard().getByRole('status')).toHaveText('Сохраняем…');await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 2');
+ const duringSave=page.waitForResponse(response=>response.url().endsWith('/api/snapshot'));
+ await page.clock.fastForward(61_000);await duringSave;await expect(page.locator('#refresh')).toBeEnabled();
+ await expect(mailCard().getByRole('status')).toHaveText('Сохраняем…');await expect(mailCard().getByRole('button',{name:'Уже решено',exact:true})).toBeDisabled();
  await expect.poll(()=>!!fail).toBe(true);fail();await expect(mailCard().getByRole('status')).toContainText('Не удалось подтвердить');
  fail=null;await mailCard().getByRole('button',{name:'Уже решено',exact:true}).click();await expect.poll(()=>!!fail).toBe(true);fail();
  await expect(mailCard().getByRole('status')).toContainText('другой вкладке');expect(attempts[1].request_id).toBe(attempts[0].request_id);
  await page.unroute('**/api/mail-secretary/action');
  await mailCard().getByRole('button',{name:'Напомнить',exact:true}).click();
  const day=new Date(Date.now()+3*86400000).toISOString().slice(0,10);
- await mailCard().getByLabel('Дата напоминания (Стамбул)').fill(day);await mailCard().getByRole('button',{name:'Сохранить дату'}).click();
+ await mailCard().getByLabel('Дата напоминания (Стамбул)').fill(day);
+ const refreshed=page.waitForResponse(response=>response.url().endsWith('/api/snapshot'));
+ await page.clock.fastForward(61_000);await refreshed;await expect(page.locator('#refresh')).toBeEnabled();
+ await expect(mailCard().getByLabel('Дата напоминания (Стамбул)')).toBeVisible();await expect(mailCard().getByLabel('Дата напоминания (Стамбул)')).toHaveValue(day);
+ await mailCard().getByRole('button',{name:'Сохранить дату'}).click();
  await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 1');
  await page.reload();await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 1');
  const later=page.locator('#mail-secretary [data-mail-case="'+id+'"]');await later.locator('summary').first().click();
@@ -50,6 +58,19 @@ test('owner ordering uses confirmed urgency and dates without duplicate or false
  await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 4');
  await expect(entries.nth(0)).toContainText('critical@example.test');await expect(entries.nth(1)).toContainText('2026-11-07');await expect(entries.nth(2)).toContainText('2026-11-10');await expect(entries.nth(3)).toContainText('low@example.test');
  await expect(page.locator('#cockpit-coverage')).toContainText('не вошла в снимок');
+ body.mail_secretary.cases[1].deadline=null;
+ body.mail_control.decisions[body.mail_secretary.cases[1].id]={status:'due',remind_on:'2026-11-04',request_id:'5'.repeat(32)};
+ await page.locator('#refresh').click();await expect(entries.nth(1)).toContainText('Наступила выбранная дата напоминания: 2026-11-04');
+ body.mail_control.queues={[mail.id]:'waiting_reply',['4'.repeat(32)]:'other'};
+ body.mail_control.case_counts={needs_user:1,waiting:1,done:0};
+ await page.locator('#refresh').click();await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 3');
+ await expect(page.locator('#cockpit-decisions [data-mail-case="'+mail.id+'"]')).toHaveCount(0);
+ const unconfirmed=page.locator('#mail-secretary [data-mail-case="'+mail.id+'"]');await unconfirmed.locator('summary').first().click();
+ await expect(unconfirmed).toContainText('Сведения дела расходятся');await expect(unconfirmed.getByRole('button',{name:'Уже решено',exact:true})).toBeDisabled();
+ body.mail_secretary={...body.mail_secretary,cases:[],omitted_cases:0,case_counts:{needs_user:0,waiting:0,done:0}};
+ body.mail_control={available:true,decisions:{}};body.cockpit.work.observed_at=new Date(Date.now()-1801e3).toISOString();
+ await page.locator('#refresh').click();await expect(page.locator('#cockpit-coverage')).toContainText('Нет свежего подтверждения запросов ops');
+ await expect(page.locator('#cockpit-decisions')).toContainText('Полнота списка не подтверждена');
  body.mail_secretary=null;body.mail_control={available:false,decisions:{}};body.cockpit.work.items=[];
  await page.locator('#refresh').click();await expect(page.locator('#cockpit-count')).toHaveText('Известных решений: 0');
  await expect(page.locator('#cockpit-decisions')).toContainText('Полнота списка не подтверждена');await expect(page.locator('#cockpit-coverage')).toContainText('Нет свежего подтверждения почтовых дел');

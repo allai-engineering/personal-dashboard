@@ -26,4 +26,9 @@ assert.deepEqual(secretaryCases(projection,now,false,{available:true,decisions:{
 assert.ok(secretaryCases(projection,now+27*3600e3,false,control).limitations.length);
 assert.ok(secretaryCases({...projection,omitted_cases:3},now,false,control).limitations.some(s=>s.includes('не вошла')));
 assert.ok(secretaryCases(null,now,false,null).limitations.length);
+const conflict=secretaryCases(projection,now,false,{available:true,decisions:{},queues:{a:'waiting_reply',b:'reply_needed',c:'waiting_reply'},case_counts:{needs_user:1,waiting:2,done:0}});
+assert.deepEqual(conflict.owners.map(r=>r.id),['b']);
+assert.equal(conflict.rows[0].unconfirmed,true);
+assert.ok(conflict.limitations.some(s=>s.includes('расходятся')));
+assert.deepEqual(secretaryCases({...projection,cases:[{...first,id:'c',kind:'waiting_reply',state:'waiting'}]},now,false,{available:true,decisions:{c:{status:'due',remind_on:'2026-11-04'}},queues:{c:'waiting_reply'}}).owners.map(r=>r.id),['c']);
 console.log('Canonical mail owner eligibility, identity, replay and coverage passed');

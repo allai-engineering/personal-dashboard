@@ -4,6 +4,8 @@
 
 Cases whose effective v3 state requires the owner appear once in the cockpit decision list alongside current explicit ops requests. The common total includes viewed unresolved ops requests. Remaining mail lanes retain waiting, reminders, completed cases, evidence and history; they have no separate owner-decision total. Counts describe known displayed cases, with explicit limitations for missing/stale control, partial coverage and omitted cases. Existing commands and canonical decisions remain unchanged.
 
+If the published case and live canonical queue disagree, show the case as unconfirmed with disabled controls, outside the owner total, until a fresh publication reconciles them. Due reminders retain their canonical date and responsibility even while the underlying correspondence waits for a reply. Automatic rendering preserves a focused reminder input and an in-flight command until acknowledgement.
+
 ## v3 reply workflow
 
 Owner approved reply queues, dated case history and cancellation after a verified response or resolution. Baseline ad10d6035a3d0c8e7ab2474289abbc6c40634d63. The existing authenticated socket supplies full queue counts and on-demand history through `/api/mail-secretary/history`; the POST uses the same authentication/origin/size boundary as evidence. No mail writes or new notification loop. Owner decisions remain root-journal records; cancellation is derived from a newer verified source event and cannot cancel a later reminder. A response may move a case back to “I owe a reply”; it does not automatically mean done. IMAP lacks reliable thread metadata and retains existing behavior. Daily bounded runs can leave unverified pending work, which is reported explicitly.

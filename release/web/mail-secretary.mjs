@@ -19,11 +19,11 @@ export function secretaryView(data,now,transportError=false){
 export function renderSecretary(data,now,transportError=false,control=null){
  let section=document.getElementById('mail-secretary');
  if(!section){section=el('aside',undefined,'mail-secretary');section.id='mail-secretary';section.setAttribute('aria-label','Почтовый секретарь');document.getElementById('cockpit-coverage').after(section);}
- if(section.contains(document.activeElement)&&document.activeElement.tagName==='INPUT')return;
+ if(mailControlsBusy(section))return;
  const open=new Set([...section.querySelectorAll('details[open]')].map(d=>d.dataset.case));
  const view=secretaryView(data,now,transportError);
  const cases=secretaryCases(data,now,transportError,control);
- const rows=cases.rows.filter(r=>r.state!=='needs_user');
+ const rows=cases.rows.filter(r=>r.state!=='needs_user'||r.unconfirmed);
  const title=el('h2');const icon=el('img');icon.src='/assets/mail-envelope.png';icon.alt='';icon.width=18;icon.height=18;title.append(icon,document.createTextNode('Почтовый секретарь'));
  section.replaceChildren(title,el('p',view.notice,'muted small'));
  if(data){const brief=el('div',undefined,'mail-brief');brief.append(el('strong','Ежедневная сводка'),el('p','Писем в очереди: '+data.pending+'. Решения для вас — в общем списке.'),el('small','Проверено '+dateLabel(data.checked_at)));section.append(brief);}
@@ -51,24 +51,29 @@ export function renderSecretary(data,now,transportError=false,control=null){
 export function secretaryCases(data,now,transportError=false,control=null){
  const decisions=control?.available?control.decisions:{};
  const rows=[...new Map((data?.cases||[]).map(r=>[r.id,r])).values()].map(row=>{
-  const decision=decisions[row.id];
-  return {...row,state:effectiveState(row,decision),queue:control?.available&&control.queues?.[row.id]||caseQueue(row,decision)};
+  const decision=decisions[row.id],queue=caseQueue(row,decision);
+  const unconfirmed=!!(control?.available&&control.queues&&control.queues[row.id]!==queue);
+  return {...row,state:effectiveState(row,decision),queue:unconfirmed?'other':queue,unconfirmed};
  });
+ const owners=rows.filter(r=>r.state==='needs_user'&&!r.unconfirmed);
  const limitations=[];
  if(!secretaryView(data,now,transportError).fresh)limitations.push('Нет свежего подтверждения почтовых дел');
  if(!control?.available)limitations.push('Сохранённые решения сейчас не подтверждены');
  if(data?.omitted_cases)limitations.push('Часть почтовых дел не вошла в снимок');
  if(data&&(data.pending>0||data.coverage?.partial>0||data.coverage?.unavailable>0))limitations.push('Охват почты неполный');
- return {rows,owners:rows.filter(r=>r.state==='needs_user'),limitations};
+ if(rows.some(r=>r.unconfirmed)||control?.available&&Number.isInteger(control.case_counts?.needs_user)&&control.case_counts.needs_user!==owners.length)limitations.push('Снимок дел и сохранённая сводка расходятся; нужно свежее обновление');
+ return {rows,owners,limitations};
 }
+export const mailControlsBusy=root=>root.contains(document.activeElement)&&document.activeElement.tagName==='INPUT'||!!root.querySelector('.mail-controls[data-pending]');
 export function mailCase(row,now,control,open=new Set(),expanded=false){
  const decision=control?.available?control.decisions[row.id]:null;
  const handoff=control?.handoffs?.[row.id];
  const d=el('details',undefined,'mail-case');d.dataset.case=row.id;d.dataset.mailCase=row.id;d.open=expanded||open.has(row.id);
  d.append(el('summary',`${services[row.service]} · ${kinds[row.kind]}`));
+ if(row.unconfirmed)d.append(el('p','Сведения дела расходятся с сохранённой сводкой. Действия недоступны до свежего обновления.','notice'));
  if(handoff)d.append(el('p',handoffLabel(handoff),'mail-handoff small'));
  if(decision)d.append(el('p',decisionLabel(decision),'mail-decision small'));
- if((!decision||['checked','due','cancelled'].includes(decision.status))&&!(handoff&&row.next_action==='ops_review'))d.append(el('p',nextActions[row.next_action]|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
+ if(!row.unconfirmed&&(!decision||['checked','due','cancelled'].includes(decision.status))&&!(handoff&&row.next_action==='ops_review'))d.append(el('p',nextActions[row.next_action]|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
  d.append(el('p',row.deadline?'Срок из письма: '+row.deadline:'Срок неизвестен','small'));
  if((!decision||decision.status==='checked')&&!handoff)d.append(el('p',blockers[row.blocker],'small'));
  d.append(el('p','Уверенность: подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));
@@ -77,7 +82,7 @@ export function mailCase(row,now,control,open=new Set(),expanded=false){
  const lastOperation=latestHandoff?(latestHandoff.diagnostic_completed?'выполнена ограниченная диагностика infra-dev':latestHandoff.status==='queued'?'поставлено в очередь ops':latestHandoff.status==='dispatching'?'запрошен запуск infra-dev':'результат infra-dev не подтверждён'):(row.last_operation==='handoff_queued'?'поставлено в очередь ops':'проверена опора на источник');
  d.append(el('p','Последняя операция: '+lastOperation+' · '+relativeTime(latestHandoff?.at||row.updated_at,now),'muted small'));
  d.append(el('p','Источник от '+dateLabel(row.observed_at)+' · '+row.sources.map(s=>s.slice(0,8)).join(', '),'muted small'));
- d.append(caseControls(row,decision,!!control?.available,open));
+ d.append(caseControls(row,decision,!!control?.available&&!row.unconfirmed,open));
  return d;
 }
 
@@ -128,9 +133,10 @@ function caseControls(row,decision,available,open){
  const send=async(action,remind_on=null)=>{
   if(!pending||pending.action!==action||pending.remind_on!==remind_on)pending={case_id:row.id,action,remind_on,request_id:crypto.randomUUID().replaceAll('-',''),expected:decision?.request_id||null};
   for(const b of [investigate,remind,resolved,save])b.disabled=true;
+  box.dataset.pending='true';
   status.textContent='Сохраняем…';
-  try{const updated=await mailPost('action',pending);dispatchEvent(new CustomEvent('mail-secretary-change',{detail:updated}));}
-  catch(error){status.textContent=error.message;for(const b of [investigate,remind,resolved,save])b.disabled=!available;}
+  try{const updated=await mailPost('action',pending);delete box.dataset.pending;dispatchEvent(new CustomEvent('mail-secretary-change',{detail:updated}));}
+  catch(error){delete box.dataset.pending;status.textContent=error.message;for(const b of [investigate,remind,resolved,save])b.disabled=!available;}
  };
  investigate.onclick=()=>send('investigate');resolved.onclick=()=>send('resolved');remind.onclick=()=>{picker.hidden=!picker.hidden;if(!picker.hidden)date.focus();};
  picker.onsubmit=e=>{e.preventDefault();date.blur();send('remind',date.value);};
