@@ -33,6 +33,21 @@ class SecretarySchemaTests(unittest.TestCase):
         data['cases'][0]['quote'] = 'PRIVATE'
         with self.assertRaises(ValueError): validate(data)
 
+    def test_backlog_contract_preserves_unknown_age_and_rejects_private_reasons(self):
+        data = fixture(); data['schema'] = 3
+        data['cases'][0].update(expected_result='unknown', next_actor='unknown')
+        data['backlog'] = {'oldest_at': '2026-11-01T00:00:00+00:00', 'unknown_age': 1,
+            'reasons': {'unattempted': 1, 'source_unavailable': 1, 'source_partial': 1,
+                        'evidence_uncertain': 0, 'budget_exhausted': 0, 'backlog_reserved': 0}}
+        self.assertEqual(validate(data)['backlog']['unknown_age'], 1)
+        for field, value in [('unknown_age', 4), ('oldest_at', 'tomorrow'), ('oldest_at', '2027-01-01T00:00:00+00:00')]:
+            invalid = copy.deepcopy(data); invalid['backlog'][field] = value
+            with self.assertRaises(ValueError): validate(invalid)
+        invalid = copy.deepcopy(data); invalid['backlog']['reasons']['subject'] = 'PRIVATE'
+        with self.assertRaises(ValueError): validate(invalid)
+        invalid = copy.deepcopy(data); invalid['backlog']['reasons']['unattempted'] = 2
+        with self.assertRaises(ValueError): validate(invalid)
+
     def test_substantive_reply_is_reviewable_without_false_completion(self):
         data = fixture(); data['cases'][0]['kind'] = 'reply'
         row = validate(data)['cases'][0]

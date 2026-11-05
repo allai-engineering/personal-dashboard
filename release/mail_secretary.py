@@ -21,12 +21,30 @@ def validate(data):
     def opaque(value):
         if not isinstance(value, str) or not re.fullmatch('[a-f0-9]{32}', value):
             raise ValueError('mail_secretary_id')
-    fields(data, 'schema checked_at run_state stop_reason pending coverage cases operations case_counts omitted_cases')
-    if type(data['schema']) is not int or data['schema'] not in (1, 2) or data['run_state'] not in ('running', 'idle', 'partial', 'failed'):
+    fields(data, 'schema checked_at run_state stop_reason pending coverage cases operations case_counts omitted_cases' + (' backlog' if data.get('schema') == 3 else ''))
+    if type(data['schema']) is not int or data['schema'] not in (1, 2, 3) or data['run_state'] not in ('running', 'idle', 'partial', 'failed'):
         raise ValueError('mail_secretary_state')
     if data['stop_reason'] not in ('running', 'batch_complete', 'backlog', 'source_unavailable', 'model_unavailable', 'budget', 'not_started'):
         raise ValueError('mail_secretary_stop')
     stamp(data['checked_at']); count(data['pending'])
+    if data['schema'] == 3:
+        backlog = data['backlog']
+        fields(backlog, 'oldest_at unknown_age reasons')
+        count(backlog['unknown_age'])
+        if backlog['unknown_age'] > data['pending']:
+            raise ValueError('mail_secretary_age')
+        oldest = backlog['oldest_at']
+        if oldest is not None:
+            stamp(oldest)
+            if dt.datetime.fromisoformat(oldest) > dt.datetime.fromisoformat(data['checked_at']):
+                raise ValueError('mail_secretary_age')
+        if (oldest is None) != (backlog['unknown_age'] == data['pending']):
+            raise ValueError('mail_secretary_age')
+        fields(backlog['reasons'], 'unattempted source_unavailable source_partial evidence_uncertain budget_exhausted backlog_reserved')
+        for value in backlog['reasons'].values():
+            count(value)
+        if sum(backlog['reasons'].values()) != data['pending']:
+            raise ValueError('mail_secretary_backlog')
     fields(data['case_counts'], 'needs_user waiting done')
     for number in data['case_counts'].values():
         count(number)
@@ -41,8 +59,8 @@ def validate(data):
     seen = set()
     for row in data['cases']:
         fields(row, 'id service kind state deadline confidence blocker next_action owner observed_at updated_at last_operation sources' +
-               (' expected_result next_actor' if data['schema'] == 2 else ''))
-        if data['schema'] == 2:
+               (' expected_result next_actor' if data['schema'] >= 2 else ''))
+        if data['schema'] >= 2:
             if row['expected_result'] not in ('unknown', 'receive_reply', 'receive_material', 'give_reply', 'review_received', 'review_notice'):
                 raise ValueError('mail_secretary_result')
             if row['next_actor'] not in ('unknown', 'user', 'counterparty', 'ops', 'none'):

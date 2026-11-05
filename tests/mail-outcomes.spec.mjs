@@ -4,6 +4,8 @@ test('saved case outcomes reach authenticated cards and preserve owner decisions
  const denied=await page.request.get('/api/snapshot');expect(denied.status()).toBe(401);
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
  const section=page.locator('#mail-secretary');
+ await expect(section).toContainText('Старейшее известное ожидание:');
+ await expect(section).toContainText('источник недоступен: 1');
  const incoming=section.locator('[data-case="'+'1'.repeat(32)+'"]');
  const outgoing=section.locator('[data-case="'+'2'.repeat(32)+'"]');
  await incoming.locator('summary').first().click();await outgoing.locator('summary').first().click();

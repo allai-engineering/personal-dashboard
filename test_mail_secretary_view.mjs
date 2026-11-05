@@ -13,3 +13,7 @@ assert.equal(secretaryView(data,now,true).running,false);
 assert.match(secretaryView(data,now+601e3).notice,/мог прерваться/);
 assert.equal(secretaryView(data,now+27*3600e3).fresh,false);
 console.log('mail secretary: unknown counts and expired active-run claims passed');
+
+const {backlogLabel}=await import('./release/web/mail-secretary.mjs');
+assert.match(backlogLabel({}),/Возраст очереди неизвестен/);
+assert.match(backlogLabel({pending:3,checked_at:'2026-11-05T12:00:00Z',backlog:{oldest_at:'2026-11-01T12:00:00Z',unknown_age:1,reasons:{source_unavailable:1,unattempted:2}}}),/4 дн.*Без даты.*1.*источник недоступен: 1/);

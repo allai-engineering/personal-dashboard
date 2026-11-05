@@ -30,7 +30,7 @@ export function renderSecretary(data,now,transportError=false,control=null){
  if(view.counts){if(control?.case_counts)Object.assign(view.counts,control.case_counts);else for(let i=0;i<rows.length;i++){const old=data.cases[i].state;if(old!==rows[i].state){view.counts[old]--;view.counts[rows[i].state]++;}}}
  const title=el('h2');const icon=el('img');icon.src='/assets/mail-envelope.png';icon.alt='';icon.width=18;icon.height=18;title.append(icon,document.createTextNode('Почтовый секретарь'));
  section.replaceChildren(title,el('p',view.notice,'muted small'));
- if(data){const brief=el('div',undefined,'mail-brief');brief.append(el('strong','Ежедневная сводка'),briefCounts(view.counts.needs_user,data.pending,queueCounts),el('small','Проверено '+dateLabel(data.checked_at)));section.append(brief);}
+ if(data){const brief=el('div',undefined,'mail-brief');brief.append(el('strong','Ежедневная сводка'),briefCounts(view.counts.needs_user,data.pending,queueCounts),el('p',backlogLabel(data),'small'),el('small','Проверено '+dateLabel(data.checked_at)));section.append(brief);}
  section.append(el('p',view.running?'Hermes разбирает текущий пакет.':'Автоматическая проверка — при ежедневном запуске.','muted small'));
  if(!control?.available)section.append(el('p','Действия временно недоступны. Сохранённые решения не изменены.','muted small'));
 
@@ -147,4 +147,13 @@ function caseHistory(row,decision,available,open){
  const cached=historyCache.get(row.id);if(cached&&cached.version===version&&Date.now()-cached.at<300000)display(cached.value);else body.append(load);
  load.onclick=async()=>{load.disabled=true;try{const value=await mailPost('history',{case_id:row.id});historyCache.set(row.id,{value,version,at:Date.now()});display(value);}catch(error){load.disabled=false;let status=body.querySelector('[role=status]');if(!status){status=el('p','','small');status.setAttribute('role','status');body.append(status);}status.textContent=error.message;}};
  detail.append(body);return detail;
+}
+
+export function backlogLabel(data){
+ const b=data.backlog;
+ if(!b)return 'Возраст очереди неизвестен для этого выпуска.';
+ const age=b.oldest_at?Math.max(0,Math.floor((Date.parse(data.checked_at)-Date.parse(b.oldest_at))/86400000)):null;
+ const labels={source_unavailable:'источник недоступен',source_partial:'неполный источник',evidence_uncertain:'нужна проверка',budget_exhausted:'лимит операций',backlog_reserved:'резерв старого остатка',unattempted:'попытки ещё не было'};
+ const reasons=Object.entries(b.reasons).filter(([,n])=>n).map(([key,n])=>`${labels[key]}: ${n}`).join('; ');
+ return `Остаток: ${data.pending}. `+(age===null?'Возраст неизвестен.':`Старейшее известное ожидание: ${age} дн.`)+` Без даты попадания в очередь: ${b.unknown_age}.`+(reasons?' Причины: '+reasons+'.':'');
 }
