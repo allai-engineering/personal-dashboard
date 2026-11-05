@@ -1,0 +1,18 @@
+{
+  "schema": 2,
+  "checked_at": "2026-11-05T12:00:00+00:00",
+  "run_state": "partial", "stop_reason": "backlog", "pending": 1,
+  "case_counts": {"needs_user": 1, "waiting": 1, "done": 0}, "omitted_cases": 0,
+  "coverage": {"ok": 1, "partial": 0, "unavailable": 0, "scope": "bounded_inbox_and_targeted"},
+  "cases": [
+    {"id": "11111111111111111111111111111111", "service": "unknown", "kind": "reply_needed", "state": "needs_user",
+     "deadline": null, "confidence": "supported_notice", "blocker": "owner_decision", "next_action": "review_reply", "owner": "user",
+     "expected_result": "give_reply", "next_actor": "user", "observed_at": "2026-10-01T12:00:00+00:00", "updated_at": "2026-11-05T12:00:00+00:00",
+     "last_operation": "evidence_verified", "sources": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]},
+    {"id": "22222222222222222222222222222222", "service": "unknown", "kind": "waiting_reply", "state": "waiting",
+     "deadline": null, "confidence": "supported_notice", "blocker": "awaiting_reply", "next_action": "check_latest", "owner": "mail-secretary",
+     "expected_result": "receive_material", "next_actor": "counterparty", "observed_at": "2026-10-05T12:00:00+00:00", "updated_at": "2026-11-05T12:00:00+00:00",
+     "last_operation": "evidence_verified", "sources": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]}
+  ],
+  "operations": []
+}

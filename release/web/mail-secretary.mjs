@@ -6,6 +6,8 @@ const states={needs_user:'Нужно ваше решение',running:'Hermes з
 const queues={reply_needed:'Я должен ответить',waiting_reply:'Ждём ответа',other:'Другие дела',snoozed:'Отложено',done:'Завершено'};
 const kinds={reply:'Ответ по вопросу',renewal:'Продление',payment_notice:'Уведомление об оплате',invoice:'Счёт',reply_needed:'Нужен ответ',access:'Доступ',waiting_reply:'Ожидание ответа',resolved_notice:'Разбор уведомления'};
 const services={unknown:'Почтовое дело',excalidraw:'Excalidraw',neon:'Neon',github:'GitHub',google:'Google',yandex:'Яндекс',hostkey:'Hostkey',openai:'OpenAI',anthropic:'Anthropic'};
+const results={unknown:'не определён',receive_reply:'получить ответ',receive_material:'получить материал',give_reply:'дать ответ',review_received:'просмотреть полученный ответ',review_notice:'рассмотреть уведомление'};
+const actors={unknown:'пока неизвестно',user:'вами',counterparty:'собеседником',ops:'Hermes · ops',none:'не требуется'};
 const blockers={owner_decision:'Нужно решение владельца',current_state_unverified:'Текущее состояние сервиса не подтверждено',awaiting_reply:'Есть уведомление об ожидаемом ответе',technical_review:'Передано в очередь ops; запуск специалиста ещё не подтверждён',notice_reviewed:'Разбор уведомления завершён; состояние сервиса не проверялось'};
 const nextActions={review_renewal:'Следующий шаг: решить, нужно ли продление сервиса. Оплата или отмена требуют вашего поручения.',review_invoice:'Следующий шаг: проверить основание счёта и факт оплаты в сервисе; письмо само по себе не доказывает долг.',review_reply:'Следующий шаг: определить, нужен ли ответ и какие сведения можно сообщить. Отправка требует вашего поручения.',review_access:'Следующий шаг: проверить уведомление о доступе через ops; вход или изменение аккаунта требуют отдельного решения.'};
 const operations={handoff_queued:'Поставлено в очередь ops',read_pdf:'Прочитана выбранная страница PDF',search:'Поиск новых писем',targeted_search:'Точечный поиск по отправителю',read:'Прочитано выбранное письмо',verify:'Проверена опора на источник',case_recorded:'Сохранено дело',irrelevant_verified:'Проверено отсутствие дела',skill_read:'Прочитан рабочий навык',tool_error:'Операция не завершилась'};
@@ -38,14 +40,16 @@ export function renderSecretary(data,now,transportError=false,control=null){
    const d=el('details');d.dataset.case=row.id;d.open=open.has(row.id);
    d.append(el('summary',`${services[row.service]} · ${kinds[row.kind]}`));
    const decision=decisions[row.id];
+   const outcome=outcomeLabels(row,decision);
+   d.append(el('p',outcome.result,'small'),el('p',outcome.actor,'small'));
    const handoff=control?.handoffs?.[row.id];
    if(handoff)d.append(el('p',handoffLabel(handoff),'mail-handoff small'));
    if(decision)d.append(el('p',decisionLabel(decision),'mail-decision small'));
-   if((!decision||['checked','due','cancelled'].includes(decision.status))&&!(handoff&&row.next_action==='ops_review'))d.append(el('p',nextActions[row.next_action]|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
-   d.append(el('p',row.deadline?'Срок из письма: '+row.deadline:'Срок неизвестен','small'));
+   if((!decision||['checked','due','cancelled'].includes(decision.status))&&!(handoff&&row.next_action==='ops_review'))d.append(el('p',(row.expected_result==='give_reply'?'Следующий шаг: подготовить ответ по вопросу. Отправка требует вашего поручения.':nextActions[row.next_action])|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Секретарь проверит новые сведения при ежедневном запуске.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
+   d.append(el('p',row.deadline?'Срок из письма: '+row.deadline:'Подтверждённый срок не установлен','small'));
    if((!decision||decision.status==='checked')&&!handoff)d.append(el('p',blockers[row.blocker],'small'));
    d.append(el('p','Уверенность: подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));
-   d.append(el('p','Ответственный: '+({user:'Вы',ops:'Hermes · ops','mail-secretary':'Почтовый секретарь'}[row.owner]),'muted small'));
+   d.append(el('p','Ведение дела: '+({user:'Вы','ops':'Hermes · ops','mail-secretary':'Почтовый секретарь'}[row.owner]),'muted small'));
    const latestHandoff=handoff&&Date.parse(handoff.at)>=Date.parse(row.updated_at)?handoff:null;
    const lastOperation=latestHandoff?(latestHandoff.diagnostic_completed?'выполнена ограниченная диагностика infra-dev':latestHandoff.status==='queued'?'поставлено в очередь ops':latestHandoff.status==='dispatching'?'запрошен запуск infra-dev':'результат infra-dev не подтверждён'):(row.last_operation==='handoff_queued'?'поставлено в очередь ops':'проверена опора на источник');
    d.append(el('p','Последняя операция: '+lastOperation+' · '+relativeTime(latestHandoff?.at||row.updated_at,now),'muted small'));
@@ -64,6 +68,11 @@ export function renderSecretary(data,now,transportError=false,control=null){
  }
 }
 
+export function outcomeLabels(row,decision){
+ const closed=effectiveState(row,decision)==='done';
+ return {result:(closed?'Ожидавшийся результат: ':'Ожидаемый результат: ')+(results[row.expected_result]||results.unknown),
+  actor:decision?.status==='resolved'?'Следующий шаг не требуется: вы закрыли дело. Выполнение по переписке не подтверждено.':closed?'Следующий шаг по этому делу не требуется.':'Следующий шаг за: '+(actors[row.next_actor]||actors.unknown)};
+}
 export function effectiveState(row,decision){
  const status=decision?.status;
  return status==='resolved'?'done':status==='due'?'needs_user':['snoozed','queued','running','blocked'].includes(status)?'waiting':row.state;

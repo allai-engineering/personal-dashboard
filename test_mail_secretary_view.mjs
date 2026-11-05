@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import {secretaryView} from './release/web/mail-secretary.mjs';
+import {secretaryView,outcomeLabels} from './release/web/mail-secretary.mjs';
+assert.deepEqual(outcomeLabels({}),{result:'Ожидаемый результат: не определён',actor:'Следующий шаг за: пока неизвестно'});
+const waiting={expected_result:'receive_material',next_actor:'counterparty',owner:'mail-secretary',state:'waiting'};
+assert.deepEqual(outcomeLabels(waiting),{result:'Ожидаемый результат: получить материал',actor:'Следующий шаг за: собеседником'});
+assert.deepEqual(outcomeLabels(waiting,{status:'resolved'}),{result:'Ожидавшийся результат: получить материал',actor:'Следующий шаг не требуется: вы закрыли дело. Выполнение по переписке не подтверждено.'});
 const now=Date.parse('2026-11-04T10:00:00Z');
 assert.equal(secretaryView(null,now).counts,null);
 const data={checked_at:new Date(now).toISOString(),run_state:'running',case_counts:{needs_user:0,waiting:1,done:0},cases:[{state:'waiting'}]};

@@ -1,5 +1,13 @@
 # Mail secretary
 
+## Case result and next actor — development, 5 November 2026
+
+The compatible consumer accepts snapshot schemas 1 and 2. Schema 2 adds only closed `expected_result` and `next_actor` codes, not names, mail text or model prose. Existing cards show the expected result and the person/role owing the next step separately from workflow ownership. Legacy cards explicitly show unknown. Owner closure retains the expected result as historical context and does not claim that the correspondent fulfilled it. Evidence, dates, the five queues and all three owner controls retain their existing authenticated contracts and visual components; this is a content extension, not a visual redesign.
+
+Install this consumer and the root publication validator through the protected integration route before the schema-2 producer. UI-only deployment must not install the protected schema file. During rollback, retain the compatible reader until a schema-1 producer publishes; preserve the current case checkpoint, new metadata, history and owner journal. This development change does not itself authorize production installation. Real-mail and owner acceptance remain in the agreed release checks.
+
+The saved synthetic fixture exercises schema validation and real authenticated HTTP routes on desktop/mobile without intercepting snapshot responses. Python contracts also retain schema-1 and forbidden-field checks. Producer persistence and actual native-model acceptance belong to the matching infra change.
+
 ## v3 reply workflow
 
 Owner approved reply queues, dated case history and cancellation after a verified response or resolution. Baseline ad10d6035a3d0c8e7ab2474289abbc6c40634d63. The existing authenticated socket supplies full queue counts and on-demand history through `/api/mail-secretary/history`; the POST uses the same authentication/origin/size boundary as evidence. No mail writes or new notification loop. Owner decisions remain root-journal records; cancellation is derived from a newer verified source event and cannot cancel a later reminder. A response may move a case back to “I owe a reply”; it does not automatically mean done. IMAP lacks reliable thread metadata and retains existing behavior. Daily bounded runs can leave unverified pending work, which is reported explicitly.

@@ -19,6 +19,20 @@ def fixture():
 
 
 class SecretarySchemaTests(unittest.TestCase):
+    def test_case_outcome_contract_accepts_legacy_and_closed_new_fields(self):
+        legacy = fixture()
+        self.assertEqual(validate(legacy), legacy)
+        data = fixture(); data['schema'] = 2
+        data['cases'][0].update(expected_result='give_reply', next_actor='user')
+        self.assertEqual(validate(data)['cases'][0]['expected_result'], 'give_reply')
+        for field in ('expected_result', 'next_actor'):
+            invalid = copy.deepcopy(data); invalid['cases'][0][field] = 'private@example.test'
+            with self.assertRaises(ValueError): validate(invalid)
+            invalid = copy.deepcopy(data); del invalid['cases'][0][field]
+            with self.assertRaises(ValueError): validate(invalid)
+        data['cases'][0]['quote'] = 'PRIVATE'
+        with self.assertRaises(ValueError): validate(data)
+
     def test_substantive_reply_is_reviewable_without_false_completion(self):
         data = fixture(); data['cases'][0]['kind'] = 'reply'
         row = validate(data)['cases'][0]

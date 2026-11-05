@@ -22,7 +22,7 @@ def validate(data):
         if not isinstance(value, str) or not re.fullmatch('[a-f0-9]{32}', value):
             raise ValueError('mail_secretary_id')
     fields(data, 'schema checked_at run_state stop_reason pending coverage cases operations case_counts omitted_cases')
-    if data['schema'] != 1 or data['run_state'] not in ('running', 'idle', 'partial', 'failed'):
+    if type(data['schema']) is not int or data['schema'] not in (1, 2) or data['run_state'] not in ('running', 'idle', 'partial', 'failed'):
         raise ValueError('mail_secretary_state')
     if data['stop_reason'] not in ('running', 'batch_complete', 'backlog', 'source_unavailable', 'model_unavailable', 'budget', 'not_started'):
         raise ValueError('mail_secretary_stop')
@@ -40,7 +40,13 @@ def validate(data):
         raise ValueError('mail_secretary_cases')
     seen = set()
     for row in data['cases']:
-        fields(row, 'id service kind state deadline confidence blocker next_action owner observed_at updated_at last_operation sources')
+        fields(row, 'id service kind state deadline confidence blocker next_action owner observed_at updated_at last_operation sources' +
+               (' expected_result next_actor' if data['schema'] == 2 else ''))
+        if data['schema'] == 2:
+            if row['expected_result'] not in ('unknown', 'receive_reply', 'receive_material', 'give_reply', 'review_received', 'review_notice'):
+                raise ValueError('mail_secretary_result')
+            if row['next_actor'] not in ('unknown', 'user', 'counterparty', 'ops', 'none'):
+                raise ValueError('mail_secretary_actor')
         opaque(row['id'])
         if row['id'] in seen:
             raise ValueError('mail_secretary_duplicate')
