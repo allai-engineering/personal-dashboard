@@ -19,49 +19,71 @@ export function secretaryView(data,now,transportError=false){
 export function renderSecretary(data,now,transportError=false,control=null){
  let section=document.getElementById('mail-secretary');
  if(!section){section=el('aside',undefined,'mail-secretary');section.id='mail-secretary';section.setAttribute('aria-label','Почтовый секретарь');document.getElementById('cockpit-coverage').after(section);}
- if(section.contains(document.activeElement)&&document.activeElement.tagName==='INPUT')return;
+ if(mailControlsBusy(section))return;
  const open=new Set([...section.querySelectorAll('details[open]')].map(d=>d.dataset.case));
  const view=secretaryView(data,now,transportError);
- const decisions=control?.available?control.decisions:{};
- const rows=(data?.cases||[]).map(r=>({...r,state:effectiveState(r,decisions[r.id])}));
- const queueCounts=control?.available&&control.queue_counts?control.queue_counts:Object.fromEntries(Object.keys(queues).map(key=>[key,data&&!data.omitted_cases?rows.filter(r=>caseQueue(r,decisions[r.id])===key).length:null]));
- if(view.counts){if(control?.case_counts)Object.assign(view.counts,control.case_counts);else for(let i=0;i<rows.length;i++){const old=data.cases[i].state;if(old!==rows[i].state){view.counts[old]--;view.counts[rows[i].state]++;}}}
+ const cases=secretaryCases(data,now,transportError,control);
+ const rows=cases.rows.filter(r=>r.state!=='needs_user'||r.unconfirmed);
  const title=el('h2');const icon=el('img');icon.src='/assets/mail-envelope.png';icon.alt='';icon.width=18;icon.height=18;title.append(icon,document.createTextNode('Почтовый секретарь'));
  section.replaceChildren(title,el('p',view.notice,'muted small'));
- if(data){const brief=el('div',undefined,'mail-brief');brief.append(el('strong','Ежедневная сводка'),briefCounts(view.counts.needs_user,data.pending,queueCounts),el('small','Проверено '+dateLabel(data.checked_at)));section.append(brief);}
+ if(data){const brief=el('div',undefined,'mail-brief');brief.append(el('strong','Ежедневная сводка'),el('p','Писем в очереди: '+data.pending+'. Решения для вас — в общем списке.'),el('small','Проверено '+dateLabel(data.checked_at)));section.append(brief);}
  section.append(el('p',view.running?'Hermes разбирает текущий пакет.':'Автоматическая проверка — при ежедневном запуске.','muted small'));
  if(!control?.available)section.append(el('p','Действия временно недоступны. Сохранённые решения не изменены.','muted small'));
 
  for(const [queue,label] of Object.entries(queues)){
-  const group=el('section',undefined,'mail-state mail-'+queue);const heading=el('h3',label);heading.append(el('span',queueCounts[queue]===null?'—':String(queueCounts[queue]),'mail-count'));group.append(heading);
-  for(const row of rows.filter(r=>(control?.available&&control.queues?.[r.id]||caseQueue(r,decisions[r.id]))===queue)){
-   const d=el('details');d.dataset.case=row.id;d.open=open.has(row.id);
-   d.append(el('summary',`${services[row.service]} · ${kinds[row.kind]}`));
-   const decision=decisions[row.id];
-   const handoff=control?.handoffs?.[row.id];
-   if(handoff)d.append(el('p',handoffLabel(handoff),'mail-handoff small'));
-   if(decision)d.append(el('p',decisionLabel(decision),'mail-decision small'));
-   if((!decision||['checked','due','cancelled'].includes(decision.status))&&!(handoff&&row.next_action==='ops_review'))d.append(el('p',nextActions[row.next_action]|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
-   d.append(el('p',row.deadline?'Срок из письма: '+row.deadline:'Срок неизвестен','small'));
-   if((!decision||decision.status==='checked')&&!handoff)d.append(el('p',blockers[row.blocker],'small'));
-   d.append(el('p','Уверенность: подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));
-   d.append(el('p','Ответственный: '+({user:'Вы',ops:'Hermes · ops','mail-secretary':'Почтовый секретарь'}[row.owner]),'muted small'));
-   const latestHandoff=handoff&&Date.parse(handoff.at)>=Date.parse(row.updated_at)?handoff:null;
-   const lastOperation=latestHandoff?(latestHandoff.diagnostic_completed?'выполнена ограниченная диагностика infra-dev':latestHandoff.status==='queued'?'поставлено в очередь ops':latestHandoff.status==='dispatching'?'запрошен запуск infra-dev':'результат infra-dev не подтверждён'):(row.last_operation==='handoff_queued'?'поставлено в очередь ops':'проверена опора на источник');
-   d.append(el('p','Последняя операция: '+lastOperation+' · '+relativeTime(latestHandoff?.at||row.updated_at,now),'muted small'));
-   d.append(el('p','Источник от '+dateLabel(row.observed_at)+' · '+row.sources.map(s=>s.slice(0,8)).join(', '),'muted small'));
-   d.append(caseControls(row,decision,!!control?.available,open));
-   group.append(d);
+  const visible=rows.filter(r=>r.queue===queue);
+  if(!visible.length)continue;
+  const group=el('section',undefined,'mail-state mail-'+queue);const heading=el('h3',label);heading.append(el('span',String(visible.length),'mail-count'));group.append(heading);
+  for(const row of visible){
+   group.append(mailCase(row,now,control,open));
   }
   section.append(group);
  }
  if(data){
-  if(data.omitted_cases)section.append(el('p',`Показано ${data.cases.length} из ${data.cases.length+data.omitted_cases} дел. Остальные сохранены; счётчики учитывают все дела.`,'muted small'));
+  if(data.omitted_cases)section.append(el('p',`Показано ${data.cases.length} из ${data.cases.length+data.omitted_cases} дел. Остальные сохранены; общий список решений может быть неполным.`,'muted small'));
   const detail=el('details');detail.dataset.case='operations';detail.open=open.has('operations');detail.append(el('summary','Подробнее · действия и охват'));
   detail.append(el('p',`В очереди: ${data.pending}. Доступны: ${data.coverage.ok}; неполный охват: ${data.coverage.partial}; недоступны: ${data.coverage.unavailable}.`,'small'));
   for(const operation of data.operations.slice(-8))detail.append(el('p',(operations[operation.action]||'Операция')+' · '+(operation.outcome==='ok'?'выполнено':'не подтверждено')+' · '+relativeTime(operation.at,now),'muted small'));
   detail.append(el('p','Ограниченная проверка входящих, исходящих Gmail и открытых переписок. Ответ снимает напоминание после проверки связи с вопросом. Архивный разбор остановлен. Письма не отправляются и не изменяются.','muted small'));section.append(detail);
  }
+}
+
+export function secretaryCases(data,now,transportError=false,control=null){
+ const decisions=control?.available?control.decisions:{};
+ const rows=[...new Map((data?.cases||[]).map(r=>[r.id,r])).values()].map(row=>{
+  const decision=decisions[row.id],queue=caseQueue(row,decision);
+  const unconfirmed=!!(control?.available&&control.queues&&control.queues[row.id]!==queue);
+  return {...row,state:effectiveState(row,decision),queue:unconfirmed?'other':queue,unconfirmed};
+ });
+ const owners=rows.filter(r=>r.state==='needs_user'&&!r.unconfirmed);
+ const limitations=[];
+ if(!secretaryView(data,now,transportError).fresh)limitations.push('Нет свежего подтверждения почтовых дел');
+ if(!control?.available)limitations.push('Сохранённые решения сейчас не подтверждены');
+ if(data?.omitted_cases)limitations.push('Часть почтовых дел не вошла в снимок');
+ if(data&&(data.pending>0||data.coverage?.partial>0||data.coverage?.unavailable>0))limitations.push('Охват почты неполный');
+ if(rows.some(r=>r.unconfirmed)||control?.available&&Number.isInteger(control.case_counts?.needs_user)&&control.case_counts.needs_user!==owners.length)limitations.push('Снимок дел и сохранённая сводка расходятся; нужно свежее обновление');
+ return {rows,owners,limitations};
+}
+export const mailControlsBusy=root=>root.contains(document.activeElement)&&document.activeElement.tagName==='INPUT'||!!root.querySelector('.mail-controls[data-pending]');
+export function mailCase(row,now,control,open=new Set(),expanded=false){
+ const decision=control?.available?control.decisions[row.id]:null;
+ const handoff=control?.handoffs?.[row.id];
+ const d=el('details',undefined,'mail-case');d.dataset.case=row.id;d.dataset.mailCase=row.id;d.open=expanded||open.has(row.id);
+ d.append(el('summary',`${services[row.service]} · ${kinds[row.kind]}`));
+ if(row.unconfirmed)d.append(el('p','Сведения дела расходятся с сохранённой сводкой. Действия недоступны до свежего обновления.','notice'));
+ if(handoff)d.append(el('p',handoffLabel(handoff),'mail-handoff small'));
+ if(decision)d.append(el('p',decisionLabel(decision),'mail-decision small'));
+ if(!row.unconfirmed&&(!decision||['checked','due','cancelled'].includes(decision.status))&&!(handoff&&row.next_action==='ops_review'))d.append(el('p',nextActions[row.next_action]|| (row.next_action==='review_notice'?'Следующий шаг: рассмотреть уведомление и решить, нужен ли ответ или действие.':row.next_action==='ops_review'?'Следующий шаг: техническая проверка через ops.':row.next_action==='check_latest'?'Следующий шаг: проверить более свежие сведения.':'Следующий шаг не требуется для разбора этого уведомления.'),'small'));
+ d.append(el('p',row.deadline?'Срок из письма: '+row.deadline:'Срок неизвестен','small'));
+ if((!decision||decision.status==='checked')&&!handoff)d.append(el('p',blockers[row.blocker],'small'));
+ d.append(el('p','Уверенность: подтверждено содержание уведомления, не текущее состояние сервиса.','muted small'));
+ d.append(el('p','Ответственный: '+({user:'Вы',ops:'Hermes · ops','mail-secretary':'Почтовый секретарь'}[row.owner]),'muted small'));
+ const latestHandoff=handoff&&Date.parse(handoff.at)>=Date.parse(row.updated_at)?handoff:null;
+ const lastOperation=latestHandoff?(latestHandoff.diagnostic_completed?'выполнена ограниченная диагностика infra-dev':latestHandoff.status==='queued'?'поставлено в очередь ops':latestHandoff.status==='dispatching'?'запрошен запуск infra-dev':'результат infra-dev не подтверждён'):(row.last_operation==='handoff_queued'?'поставлено в очередь ops':'проверена опора на источник');
+ d.append(el('p','Последняя операция: '+lastOperation+' · '+relativeTime(latestHandoff?.at||row.updated_at,now),'muted small'));
+ d.append(el('p','Источник от '+dateLabel(row.observed_at)+' · '+row.sources.map(s=>s.slice(0,8)).join(', '),'muted small'));
+ d.append(caseControls(row,decision,!!control?.available&&!row.unconfirmed,open));
+ return d;
 }
 
 export function effectiveState(row,decision){
@@ -111,16 +133,15 @@ function caseControls(row,decision,available,open){
  const send=async(action,remind_on=null)=>{
   if(!pending||pending.action!==action||pending.remind_on!==remind_on)pending={case_id:row.id,action,remind_on,request_id:crypto.randomUUID().replaceAll('-',''),expected:decision?.request_id||null};
   for(const b of [investigate,remind,resolved,save])b.disabled=true;
+  box.dataset.pending='true';
   status.textContent='Сохраняем…';
-  try{const updated=await mailPost('action',pending);dispatchEvent(new CustomEvent('mail-secretary-change',{detail:updated}));}
-  catch(error){status.textContent=error.message;for(const b of [investigate,remind,resolved,save])b.disabled=!available;}
+  try{const updated=await mailPost('action',pending);delete box.dataset.pending;dispatchEvent(new CustomEvent('mail-secretary-change',{detail:updated}));}
+  catch(error){delete box.dataset.pending;status.textContent=error.message;for(const b of [investigate,remind,resolved,save])b.disabled=!available;}
  };
  investigate.onclick=()=>send('investigate');resolved.onclick=()=>send('resolved');remind.onclick=()=>{picker.hidden=!picker.hidden;if(!picker.hidden)date.focus();};
  picker.onsubmit=e=>{e.preventDefault();date.blur();send('remind',date.value);};
  actions.append(investigate,remind,resolved);box.append(actions,picker,status);return box;
 }
-
-function briefCounts(decisions,pending,counts){const grid=el('div',undefined,'mail-brief-counts');for(const [count,label] of [[counts.reply_needed,'я должен ответить'],[counts.waiting_reply,'ждём ответа'],[decisions,'к решению'],[pending,'писем в очереди']]){const item=el('div');item.append(el('b',count===null?'—':String(count)),el('span',label));grid.append(item);}return grid;}
 
 export function historyLabel(event){
  if(event.event==='reminder_cancelled')return 'Напоминание отменено: '+({reply_received:'получен ответ',question_resolved:'вопрос решён по письму',owner_resolved:'вы отметили вопрос решённым'}[event.reason]||'причина неизвестна');

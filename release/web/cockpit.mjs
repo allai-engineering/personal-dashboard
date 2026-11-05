@@ -1,6 +1,8 @@
 import {overview,reconcile,compact,opaque,incidentView,maintenanceWork} from './cockpit-view.mjs';
 import {dateLabel,relativeTime} from './account-view.mjs';
 import {machineAction} from './operations.mjs';
+import {freshAt} from './operations-view.mjs';
+import {secretaryCases,mailCase,mailControlsBusy} from './mail-secretary.mjs';
 const $=id=>document.getElementById(id);
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const domains={courts:'Суды',subscriptions:'Аккаунты',balances:'Балансы',machines:'Машины',hermes:'Hermes'};
@@ -89,6 +91,7 @@ function evidence(now){
  if(document.activeElement?.closest('#evidence-content')===null)title.focus({preventScroll:true});
 }
 export function renderCockpit(snapshot,accounts,resources,now,transportError){
+ if(mailControlsBusy($('cockpit-decisions')))return;
  const view=overview(snapshot,accounts,resources,now,transportError);
  const machines=new Map(resources.machines.map(m=>['machine-'+m.id,m]));
  for(const r of view.records)if(machines.has(r.id))r.recommendation=machineAction(machines.get(r.id));
@@ -109,14 +112,26 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  for(const r of gaps){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
  for(const r of gaps.filter(r=>r.work.lane==='owner')){decisions.push(r);expanded.push(r);}
  delegated.push(...gaps.filter(r=>r.work.item&&r.work.lane==='hermes'));
+ const mail=secretaryCases(snapshot?.mail_secretary,now,transportError,snapshot?.mail_control);
+ for(const item of mail.owners){
+  const decision=snapshot?.mail_control?.decisions[item.id],reminder=decision?.status==='due'?decision.remind_on:null;
+  const record={id:'mail-'+item.id,mail:item,tone:'warning',deadline:[item.deadline,reminder].filter(Boolean).sort()[0]};decisions.push(record);expanded.push(record);
+ }
+ const byPriority=(a,b)=>Number(b.tone==='critical')-Number(a.tone==='critical')||(a.deadline||'9999').localeCompare(b.deadline||'9999')||a.id.localeCompare(b.id);
+ decisions.sort(byPriority);expanded.sort(byPriority);
  for(const r of view.records){
   const work=maintenanceWork(r,snapshot?.cockpit?.work,now,transportError);
   if(work){const activity={...r,tone:'ok',owner:'Hermes · '+(work.item.actor||'ops'),work,detail:'На замере без замечаний. Подготовка Hermes учитывается отдельно.'};if(work.active)delegated.unshift(activity);else delegated.push(activity);registry.set(opaque(r.id),activity);}
  }
- $('cockpit-coverage').replaceChildren(el('strong',`${decisions.length} решений для вас · ${delegated.length} задач у Hermes · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
- $('cockpit-count').textContent=expanded.length+' записей';
- $('cockpit-decisions').replaceChildren(...expanded.map(r=>row(r,now)));
- if(!expanded.length)$('cockpit-decisions').append(el('p',decisions.length?'Остальное просмотрено и остаётся нерешённым ниже.':'Подтверждённых запросов к вам нет. Технические проблемы — в очереди Hermes ниже.','cockpit-empty'));
+ const limitations=[...mail.limitations];
+ if(!view.coverageFresh||snapshot?.cockpit?.work?.status!=='ok'||!freshAt(snapshot?.cockpit?.work?.observed_at,now,1800))limitations.push('Нет свежего подтверждения запросов ops');
+ const countLabel='Известных решений: '+decisions.length;
+ $('cockpit-coverage').replaceChildren(el('strong',`${countLabel} · ${delegated.length} задач у Hermes · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
+ if(limitations.length)$('cockpit-coverage').append(el('p','Общий охват неполный: '+limitations.join('. ')+'. Количество может быть больше.','small'));
+ $('cockpit-count').textContent=countLabel;
+ const openMail=new Set([...$('cockpit-decisions').querySelectorAll('details[open]')].map(d=>d.dataset.case));
+ $('cockpit-decisions').replaceChildren(...expanded.map(r=>r.mail?mailCase(r.mail,now,snapshot?.mail_control,openMail,true):row(r,now)));
+ if(!expanded.length)$('cockpit-decisions').append(el('p',decisions.length?'Остальное просмотрено и остаётся нерешённым ниже.':limitations.length?'В доступной части запросов к вам нет. Полнота списка не подтверждена.':'Подтверждённых запросов к вам нет. Технические проблемы — в очереди Hermes ниже.','cockpit-empty'));
  $('cockpit-seen').hidden=!viewed.length;$('cockpit-seen-count').textContent='Просмотрено · не решено: '+viewed.length;
  $('cockpit-seen-list').replaceChildren(...viewed.map(r=>row(r,now,{small:true})));
  $('cockpit-unknown-count').textContent='Пробелы в данных: '+gaps.length;$('cockpit-unknown').hidden=!gaps.length;
