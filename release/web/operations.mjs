@@ -78,8 +78,9 @@ function machineCard(m,now,open,transportError,work){
  const stage=m.tone==='ok'?maintenanceWork(record,work,now,transportError):incidentView(record,work,now,transportError);
  if(stage){
   card.append(el('p','Hermes: '+stage.label,'small'));
-  if(stage.action)card.append(el('p','Последний этап: '+stage.action,'small'));
+  if(stage.action)card.append(el('p','Последний этап: '+stage.action+(stage.at?' · '+relativeTime(stage.at,now):''),'small'));
   if(stage.blocker)card.append(el('p',stage.blocker,'small'));
+  if(stage.history){const h=stage.history;card.append(el('p','Ранее: '+h.action+' · '+relativeTime(h.at,now)+(h.blocker?' · '+h.blocker:''),'muted small'));}
   if(stage.preparation)card.append(el('p',stage.preparation.label+' · '+relativeTime(stage.preparation.at,now),'small'));
   if(stage.lane==='owner')card.append(el('p','Нужно от вас: '+stage.item.decision,'small'));
  }

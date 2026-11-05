@@ -1,4 +1,4 @@
-import {overview,reconcile,compact,opaque,incidentView,maintenanceWork} from './cockpit-view.mjs';
+import {overview,reconcile,compact,opaque,incidentView,maintenanceWork,workSummary} from './cockpit-view.mjs';
 import {dateLabel,relativeTime} from './account-view.mjs';
 import {machineAction} from './operations.mjs';
 const $=id=>document.getElementById(id);
@@ -46,14 +46,18 @@ function openLink(record,label){
 }
 function row(record,now,{small=false,scope='issue'}={}){
  const article=el('article',null,'cockpit-row '+(record.tone||'unknown')+(small?' is-seen':''));article.id='cockpit-row-'+opaque(record.id)+'-'+scope;
+ if(record.work||record.phase)article.dataset.workPhase=record.work?.phase||record.phase;
  const when=el('div',record.when|| (record.observedAt?relativeTime(record.observedAt,now):'Нет замера'),'cockpit-when');
  const body=el('div',null,'cockpit-body');
  body.append(el('span',record.badge||(record.unconfirmed?'Не решено · текущий статус неизвестен':record.work?.label|| (record.tone==='critical'?'Важно · не решено':record.tone==='unknown'?'Нет подтверждения':small?'Просмотрено · не решено':'Требует внимания')),'cockpit-tag '+(record.tone||'unknown')));
  body.append(el('h3',displayTitle(record.title)));
  if(!small){body.append(el('p',record.detail));if(record.domain)body.append(el('p',(record.owner||'Ответственный не подтверждён')+' · '+(domains[record.domain]||record.domain),'muted small'));}
- if(record.work?.action&&!small)body.append(el('p','Последний этап: '+record.work.action,'small'));
+ const progress=record.work||record.progress;
+ if(record.unconfirmed&&record.work&&!small)body.append(el('p',record.work.label,'small'));
+ if(progress?.action&&!small)body.append(el('p','Последний этап: '+progress.action+(progress.at?' · '+relativeTime(progress.at,now):''),'small'));
  if(record.work?.item&&!small)body.append(el('p','Отметка Hermes: '+relativeTime(record.work.item.updated_at,now),'muted small'));
- if(record.work?.blocker&&!small)body.append(el('p',record.work.blocker,'small'));
+ if(progress?.blocker&&!small)body.append(el('p',progress.blocker,'small'));
+ if(record.work?.history&&!small){const h=record.work.history;body.append(el('p','Ранее: '+h.action+' · '+relativeTime(h.at,now)+(h.blocker?' · '+h.blocker:''),'muted small'));}
  if(!small&&record.work?.preparation)body.append(el('p',record.work.preparation.label+' · '+relativeTime(record.work.preparation.at,now),'small'));
  const action=issueAction(record);if(action&&!small)body.append(el('p','Что сделать: '+action,'small'));
  body.append(openLink(record));article.append(when,body);return article;
@@ -63,11 +67,13 @@ function table(pairs){
  for(const [label,value]of pairs){const pair=el('div');pair.append(el('dt',label),el('dd',value==null?'Неизвестно':word(String(value))));dl.append(pair);}
  return dl;
 }
-function taskRecord(task,now){
- const state=task.active?'Выполняется · процесс подтверждён':!task.fresh?'Старый снимок · текущее состояние неизвестно':['claimed','running'].includes(task.state)?'Выполнение не подтверждено':word(task.state);
- return {id:'task-'+task.id,domain:'hermes',title:task.label,badge:state,tone:task.state==='failed'?'warning':'unknown',observedAt:task.observed_at,
+function taskRecord(task,now,publishedAt){
+ const state=task.active?'Выполняется · процесс подтверждён':!task.fresh?'Старый снимок · текущее состояние неизвестно':({queued:'В очереди · плановый запуск',waiting:'Ожидание · расписание приостановлено',interrupted:task.state==='failed'?'Ошибка процесса · результат не принят':'Процесс остановился · итог не подтверждён',result:'Процесс завершён · результат требует проверки'}[task.phase]||'Выполнение не подтверждено');
+ const progress=task.progress_at?{action:'Отметка прогресса без описания операции',at:task.progress_at}:task.finished_at?{action:'Завершение процесса',at:task.finished_at}:task.started_at?{action:'Начало процесса',at:task.started_at}:task.claimed_at?{action:'Запуск принят',at:task.claimed_at}:{action:'Операция не записана',at:null};
+ progress.blocker=task.phase==='unconfirmed'?'Нет свежего подтверждения процесса':task.phase==='interrupted'?'Запуск остановился; предметный итог не подтверждён':task.phase==='waiting'?'Плановые запуски приостановлены':task.phase==='queued'?'Ожидает планового запуска':task.phase==='result'?'Завершение процесса не доказывает восстановление':null;
+ return {id:'task-'+task.id,domain:'hermes',title:task.label,badge:state,phase:task.phase,progress,tone:task.state==='failed'?'warning':'unknown',observedAt:task.observed_at,
  detail:(task.origin==='scheduled'?'Плановый':task.origin==='manual'?'Ручной':'Неизвестный')+' запуск · '+state,
- owner:'Профиль '+task.profile,next:'Посмотреть запись исполнения',evidence:[['Профиль',task.profile],['Источник запуска',word(task.origin)],['Состояние процесса',state],['Принят',dateLabel(task.claimed_at)],['Начало',dateLabel(task.started_at)],['Завершение',dateLabel(task.finished_at)],['Последняя отметка прогресса',task.progress_at?dateLabel(task.progress_at):'Не записана; это само по себе не ошибка'],['Следующий плановый запуск',task.next_run_at?dateLabel(task.next_run_at):'Неизвестен'],['Контрольная точка текущей работы','Не записана'],['Область результата','Статус процесса не доказывает полноту проверки данных'],['Последнее чтение журнала',relativeTime(task.observed_at,now)]]};
+ owner:'Профиль '+task.profile,next:'Посмотреть запись исполнения',evidence:[['Источник состояния','Журнал исполнений Hermes'],['Профиль',task.profile],['Источник запуска',word(task.origin)],['Состояние процесса',state],['Принят',dateLabel(task.claimed_at)],['Начало',dateLabel(task.started_at)],['Завершение',dateLabel(task.finished_at)],['Последняя отметка прогресса',task.progress_at?dateLabel(task.progress_at):'Не записана; это само по себе не ошибка'],['Следующий плановый запуск',task.next_run_at?dateLabel(task.next_run_at):'Неизвестен'],['Контрольная точка текущей работы','Журнал не содержит этап предметной задачи'],['Область результата','Статус процесса не доказывает полноту проверки данных'],['Время чтения журнала',dateLabel(task.observed_at)],['Время публикации сводки',dateLabel(publishedAt)]]};
 }
 function evidence(now){
  const root=$('evidence-content'),key=location.hash.split('/')[1];
@@ -81,7 +87,8 @@ function evidence(now){
  if(displayTitle(r.title)!==r.title)root.append(el('p','Название в источнике: '+r.title,'muted small'));
  if(r.unconfirmed)root.append(el('p','Ранее проблема была подтверждена. Сейчас данных для проверки её состояния нет.','notice'));
  root.append(el('p',r.detail),table([['Ответственный',r.owner||'Не подтверждён'],['Время наблюдения',r.observedAt?dateLabel(r.observedAt):'Неизвестно'],...r.evidence]));
- if(r.work){root.append(table([['Передача',r.work.label],['Последний этап',r.work.action],['Остановка',r.work.blocker],['Отметка Hermes',r.work.item?dateLabel(r.work.item.updated_at):null],['Запуск на замере',r.work.item?.execution_state],['Статус прочитан',r.work.observedAt?dateLabel(r.work.observedAt):null],['Задача',r.work.item?.task_ref]]));}
+ if(r.work){root.append(table([['Источник состояния','Checkpoint ops / сохранённый handoff'],['Передача',r.work.label],['Последний этап',r.work.action],['Остановка',r.work.blocker],['Отметка Hermes',r.work.item?dateLabel(r.work.item.updated_at):null],['Запуск ops на замере',r.work.item?.execution_state],['Время чтения записи ops',r.work.observedAt?dateLabel(r.work.observedAt):null],['Время публикации сводки',dateLabel(r.publishedAt)],['Задача',r.work.item?.task_ref],['Область подтверждения процесса',r.work.item?.actor==='infra-dev'?'Сведения о процессе владельца ops; этап infra-dev — из сохранённого handoff':'Живой процесс не доказывает выполнение конкретной операции']]));}
+ if(r.work?.history)root.append(table([['Историческая операция',r.work.history.action],['Историческая блокировка',r.work.history.blocker],['Время исторической записи',dateLabel(r.work.history.at)],['Согласованность','Запись относится к другому состоянию источника; активность и запрос владельцу не подтверждены']]));
  if(r.work?.preparation)root.append(table([['Проверка плана',r.work.preparation.label],['Проверено',dateLabel(r.work.preparation.at)],['Ограничение','Проверка плана не подтверждает очистку или восстановление машины.']]));
  const action=issueAction(r);if(action)root.append(el('p','Что сделать: '+action));
  if(r.domain&&domains[r.domain]){const source=el('a','Открыть раздел «'+domains[r.domain]+'»','cockpit-action');source.href='#'+r.domain;root.append(source);}
@@ -99,21 +106,22 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  if(cleared)saveSeen();
  active=reconcile(active,view.records,view.retired);
  registry=new Map(view.records.map(r=>[opaque(r.id),r]));for(const r of active.values())registry.set(opaque(r.id),r);
- for(const r of active.values()){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
+ for(const r of active.values()){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.publishedAt=snapshot?.cockpit?.collected_at;r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
  const seenForRows=new Map([...active.values()].map(r=>[r.id,seen.get(opaque(r.id))]));
  const ordered=[...active.values()].sort((a,b)=>Number(b.tone==='critical')-Number(a.tone==='critical')||Number(b.unconfirmed)-Number(a.unconfirmed));
  const decisions=ordered.filter(r=>r.work.lane==='owner');
  const expanded=decisions.filter(r=>!compact(r,seenForRows)),viewed=decisions.filter(r=>compact(r,seenForRows));
  const delegated=ordered.filter(r=>r.work.lane==='hermes');
  const gaps=view.records.filter(r=>r.state==='unknown'&&!active.has(r.id));
- for(const r of gaps){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
+ for(const r of gaps){r.work=incidentView(r,snapshot?.cockpit?.work,now,transportError);r.publishedAt=snapshot?.cockpit?.collected_at;r.owner=r.work.lane==='owner'?'Вы':r.work.item?.actor==='infra-dev'?'Hermes · infra-dev':'Hermes · ops';}
  for(const r of gaps.filter(r=>r.work.lane==='owner')){decisions.push(r);expanded.push(r);}
- delegated.push(...gaps.filter(r=>r.work.item&&r.work.lane==='hermes'));
+ delegated.push(...gaps.filter(r=>(r.work.item||r.work.history)&&r.work.lane==='hermes'));
  for(const r of view.records){
   const work=maintenanceWork(r,snapshot?.cockpit?.work,now,transportError);
-  if(work){const activity={...r,tone:'ok',owner:'Hermes · '+(work.item.actor||'ops'),work,detail:'На замере без замечаний. Подготовка Hermes учитывается отдельно.'};if(work.active)delegated.unshift(activity);else delegated.push(activity);registry.set(opaque(r.id),activity);}
+  if(work){const activity={...r,tone:'ok',publishedAt:snapshot?.cockpit?.collected_at,owner:'Hermes · '+(work.item.actor||'ops'),work,detail:'На замере без замечаний. Результат и подготовка Hermes учитываются отдельно.'};if(work.active)delegated.unshift(activity);else delegated.push(activity);registry.set(opaque(r.id),activity);}
  }
- $('cockpit-coverage').replaceChildren(el('strong',`${decisions.length} решений для вас · ${delegated.length} задач у Hermes · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
+ const workCounts=workSummary(delegated.map(r=>r.work));
+ $('cockpit-coverage').replaceChildren(el('strong',`${decisions.length} решений для вас · Задачи Hermes — ${workCounts} · ${gaps.length} пробелов`),el('p',view.coverageFresh?'Обновление сводки: 15 мин · актуальность каждого источника — в доказательствах.':'Нет свежего чтения Court / Hermes. Активная работа не подтверждена.','small'));
  $('cockpit-count').textContent=expanded.length+' записей';
  $('cockpit-decisions').replaceChildren(...expanded.map(r=>row(r,now)));
  if(!expanded.length)$('cockpit-decisions').append(el('p',decisions.length?'Остальное просмотрено и остаётся нерешённым ниже.':'Подтверждённых запросов к вам нет. Технические проблемы — в очереди Hermes ниже.','cockpit-empty'));
@@ -127,16 +135,17 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  });
  $('cockpit-work').replaceChildren(...delegated.slice(0,6).map(r=>row(r,now,{scope:'work'})));
  if(delegated.length>6){const more=el('details',null,'cockpit-fold');more.append(el('summary','Ещё задач у Hermes: '+(delegated.length-6)),...delegated.slice(6).map(r=>row(r,now,{scope:'work'})));$('cockpit-work').append(more);}
- $('cockpit-work-count').textContent=delegated.length+' задач';
+ $('cockpit-work-count').textContent=workCounts;$('hermes-work-count').textContent=workCounts;
  if(!delegated.length)$('cockpit-work').append(el('p','Нерешённых проблем в очереди не видно. Полнота данных указана отдельно.','cockpit-empty'));
  $('hermes-incidents').replaceChildren(...delegated.map(r=>row(r,now,{scope:'hermes-work'})));
  $('cockpit-events').replaceChildren(...events.slice(0,3));
  if(!events.length)$('cockpit-events').append(el('p','Подтверждённых дат из доступных источников на 7 дней нет. Это не означает отсутствие сроков.','cockpit-empty'));
  if(events.length>3){const more=el('details',null,'cockpit-fold');more.append(el('summary','Ещё дат: '+(events.length-3)),...events.slice(3));$('cockpit-events').append(more);}
- const taskRecords=view.tasks.map(t=>taskRecord(t,now));for(const r of taskRecords)registry.set(opaque(r.id),r);
- $('cockpit-active').replaceChildren(...view.activeTasks.map(t=>row(taskRecord(t,now),now,{scope:'active'})));
+ const taskRecords=view.tasks.map(t=>taskRecord(t,now,snapshot?.cockpit?.collected_at));for(const r of taskRecords)registry.set(opaque(r.id),r);
+ $('cockpit-active').replaceChildren(...taskRecords.filter(t=>t.phase==='active').map(r=>row(r,now,{scope:'active'})));
  if(!view.activeTasks.length)$('cockpit-active').append(el('p','Подтверждённых активных исполнений нет. Это не доказательство простоя: журнал может быть неполным.','cockpit-empty'));
  $('hermes-tasks').replaceChildren(...taskRecords.map(r=>row(r,now,{scope:'tasks'})));
+ $('hermes-task-count').textContent=workSummary(view.tasks);
  if(!taskRecords.length)$('hermes-tasks').append(el('p','Записи исполнений недоступны.','cockpit-empty'));
  $('hermes-coverage').textContent=(view.coverageFresh?'Снимок журналов получен. ':'Снимок журналов устарел. ')+view.profiles.map(p=>p.id+': '+word(p.status)+(p.stored_jobs==null?'':' · '+p.stored_jobs+' заданий')).join(' / ');
  $('court-summary').replaceChildren(el('h2',view.courtFresh&&view.court?.status==='ok'?'Охват подтверждён':'Суды: охват неполный'),el('p','Статус отдельного сборщика относится только к указанной области проверки. Он не закрывает пробелы других источников.'));

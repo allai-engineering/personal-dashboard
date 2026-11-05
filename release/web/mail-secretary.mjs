@@ -2,7 +2,6 @@ import {relativeTime,dateLabel} from './account-view.mjs';
 const evidenceCache=new Map();
 const historyCache=new Map();
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-const states={needs_user:'Нужно ваше решение',running:'Hermes занимается',waiting:'Ожидание и очередь',done:'Завершено'};
 const queues={reply_needed:'Я должен ответить',waiting_reply:'Ждём ответа',other:'Другие дела',snoozed:'Отложено',done:'Завершено'};
 const kinds={reply:'Ответ по вопросу',renewal:'Продление',payment_notice:'Уведомление об оплате',invoice:'Счёт',reply_needed:'Нужен ответ',access:'Доступ',waiting_reply:'Ожидание ответа',resolved_notice:'Разбор уведомления'};
 const services={unknown:'Почтовое дело',excalidraw:'Excalidraw',neon:'Neon',github:'GitHub',google:'Google',yandex:'Яндекс',hostkey:'Hostkey',openai:'OpenAI',anthropic:'Anthropic'};
@@ -12,9 +11,9 @@ const operations={handoff_queued:'Поставлено в очередь ops',re
 export function secretaryView(data,now,transportError=false){
  const age=now-Date.parse(data?.checked_at);
  const fresh=!!data&&!transportError&&Number.isFinite(age)&&age>=-60000&&age<26*3600e3;
- const running=fresh&&data.run_state==='running'&&age<10*60e3;
- const counts=data?Object.fromEntries(Object.keys(states).map(s=>[s,s==='running'?(running?1:0):data.case_counts[s]])):null;
- return {fresh,running,counts,notice:!data?'Проверка ещё не опубликована. Количество дел неизвестно.':!fresh?'Проверка устарела или недоступна. Сохранённые дела остаются ниже.':running?'Идёт ограниченный разбор почты.':data.run_state==='running'?'Текущая работа не подтверждена. Последний запуск мог прерваться.':data.stop_reason==='batch_complete'?'Ограниченный пакет разобран. Полнота почтового архива не проверялась.':data.stop_reason==='source_unavailable'?'Часть источников недоступна. Очередь сохранена.':data.stop_reason==='model_unavailable'?'Разбор остановился: ответ агента не подтверждён. Очередь сохранена.':'Пакет завершён. Оставшиеся письма сохранены в очереди.'};
+ // Mail publication contains no native process identity or liveness evidence.
+ const counts=data?{...data.case_counts,running:0}:null;
+ return {fresh,running:false,counts,notice:!data?'Проверка ещё не опубликована. Количество дел неизвестно.':!fresh?'Проверка устарела или недоступна. Сохранённые дела остаются ниже.':data.run_state==='running'?'Текущая работа не подтверждена. Последний запуск мог прерваться.':data.stop_reason==='batch_complete'?'Ограниченный пакет разобран. Полнота почтового архива не проверялась.':data.stop_reason==='source_unavailable'?'Часть источников недоступна. Очередь сохранена.':data.stop_reason==='model_unavailable'?'Разбор остановился: ответ агента не подтверждён. Очередь сохранена.':'Пакет завершён. Оставшиеся письма сохранены в очереди.'};
 }
 export function renderSecretary(data,now,transportError=false,control=null){
  let section=document.getElementById('mail-secretary');
@@ -29,7 +28,7 @@ export function renderSecretary(data,now,transportError=false,control=null){
  const title=el('h2');const icon=el('img');icon.src='/assets/mail-envelope.png';icon.alt='';icon.width=18;icon.height=18;title.append(icon,document.createTextNode('Почтовый секретарь'));
  section.replaceChildren(title,el('p',view.notice,'muted small'));
  if(data){const brief=el('div',undefined,'mail-brief');brief.append(el('strong','Ежедневная сводка'),briefCounts(view.counts.needs_user,data.pending,queueCounts),el('small','Проверено '+dateLabel(data.checked_at)));section.append(brief);}
- section.append(el('p',view.running?'Hermes разбирает текущий пакет.':'Автоматическая проверка — при ежедневном запуске.','muted small'));
+ section.append(el('p','Автоматическая проверка — при ежедневном запуске. Подтверждения процессов — в разделе Hermes.','muted small'));
  if(!control?.available)section.append(el('p','Действия временно недоступны. Сохранённые решения не изменены.','muted small'));
 
  for(const [queue,label] of Object.entries(queues)){

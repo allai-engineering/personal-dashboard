@@ -1,5 +1,56 @@
 import {test,expect} from '@playwright/test';
 
+test('Hermes states and counts follow verified execution, stops and scoped results',async({page},testInfo)=>{
+ await page.clock.install();
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ const body=await(await page.request.get('/api/snapshot')).json(),stamp=new Date().toISOString(),m=body.operations.fleet.machines[0];
+ body.accounts=[];body.operations.balances=[];
+ Object.assign(body.cockpit.court,{status:'ok',receipt_scope:'courts',search_status:'complete',unverified:0,carried_forward:0});
+ m.state='degraded';m.issues=[{code:'service',text:'Synthetic service failure',severity:'warning',observed_at:stamp,ttl_seconds:1800}];
+ const item={record_id:'machine-'+m.id,condition_key:'service:warning',fingerprint:'b'.repeat(64),source_state:'open',source_at:stamp,queued_at:stamp,updated_at:stamp,state:'queued',action:'diagnose',blocker:'none',decision:null,task_ref:null,execution_key:'b'.repeat(24),execution_state:'unknown',execution_liveness:'unverified'};
+ const task={...body.cockpit.tasks[2],id:'b'.repeat(24),state:'running',liveness:'unverified',label:'Synthetic execution'};
+ body.cockpit.tasks=[task];body.cockpit.work={status:'ok',observed_at:stamp,items:[item]};
+ await page.route(/\/api\/(snapshot|refresh)$/,r=>r.fulfill({json:body}));await page.locator('#refresh').click();
+ const card=()=>page.locator('#cockpit-work .cockpit-row').filter({hasText:m.id});
+ await expect(card()).toHaveAttribute('data-work-phase','queued');
+ await expect(page.locator('#cockpit-work-count')).toHaveText('В работе: 0 · В очереди: 1');
+ await expect(page.getByRole('heading',{name:'Задачи Hermes',exact:true})).toBeVisible();
+ await page.locator('#nav-hermes').click();await expect(page.locator('#hermes-work-count')).toHaveText('В работе: 0 · В очереди: 1');
+ await expect(page.locator('#hermes-task-count')).toHaveText('В работе: 0 · Не подтверждено: 1');
+ Object.assign(item,{state:'accepted',action:'inspect_service',execution_state:'running',execution_liveness:'verified'});
+ task.liveness='verified';await page.locator('#refresh').click();await page.locator('#nav-overview').click();
+ await expect(card()).toHaveAttribute('data-work-phase','active');await expect(page.locator('#cockpit-work-count')).toHaveText('В работе: 1');
+ await expect(page.locator('#cockpit-active')).toContainText('Synthetic execution');
+ item.blocker='awaiting_source';await page.locator('#refresh').click();
+ await expect(card()).toHaveAttribute('data-work-phase','waiting');await expect(card()).toContainText('Нет свежих данных источника');
+ item.blocker='none';await page.clock.fastForward(121_000);await page.locator('#refresh').click();
+ await expect(card()).toHaveAttribute('data-work-phase','unconfirmed');await expect(card()).toContainText('Диагностика служб');
+ await expect(page.locator('#cockpit-active')).toContainText('Подтверждённых активных исполнений нет');
+ const current=await page.evaluate(()=>new Date().toISOString());
+ body.cockpit.collected_at=current;body.cockpit.work.observed_at=current;task.observed_at=current;
+ Object.assign(item,{execution_state:'completed',execution_liveness:'not_applicable'});Object.assign(task,{state:'completed',liveness:'not_applicable',finished_at:current});
+ await page.locator('#refresh').click();await expect(card()).toHaveAttribute('data-work-phase','interrupted');
+ await expect(card()).toContainText('без итога по проблеме');
+ Object.assign(item,{state:'waiting',action:'test_fix',blocker:'no_safe_procedure',preparation:{status:'passed_conditional',tested_at:stamp,checks:17,current_occurrence:true}});
+ await page.locator('#refresh').click();await expect(card()).toHaveAttribute('data-work-phase','waiting');
+ await expect(card()).toContainText('17 Linux-проверок пройдено · план условный');
+ await card().getByRole('link').click();await expect(page.locator('#evidence-content')).toContainText('Время публикации сводки');
+ await expect(page.locator('#evidence-content')).toContainText('Время чтения записи ops');
+ await expect(page.locator('#evidence-content')).toContainText('не подтверждает очистку');await page.locator('#evidence-back').click();
+ item.state='needs_user';item.blocker='owner_approval';item.decision='Synthetic owner approval';
+ m.issues[0].severity='critical';await page.locator('#refresh').click();
+ await expect(page.locator('#cockpit-decisions')).not.toContainText(item.decision);
+ await expect(card()).toHaveAttribute('data-work-phase','unconfirmed');await expect(card()).toContainText('другому состоянию источника');
+ await expect(card()).toContainText('Ранее');
+ m.state='observed_ok';m.issues=[];m.observed_at=current;item.state='resolved';item.source_state='clear';item.source_at=current;item.blocker='none';item.decision=null;item.action='verify_recovery';
+ await page.locator('#refresh').click();await expect(card()).toHaveAttribute('data-work-phase','recovered');
+ await expect(page.locator('#cockpit-work-count')).toHaveText('В работе: 0 · Восстановление проверено: 1');
+ await page.locator('#nav-hermes').click();await expect(page.locator('#hermes-task-count')).toHaveText('В работе: 0 · Результат процесса: 1');
+ await expect(page.locator('#hermes-tasks')).toContainText('Процесс завершён · результат требует проверки');
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ await page.screenshot({path:testInfo.outputPath('hermes-states.png'),fullPage:true});
+});
+
 test('mail secretary shows real case states and expires a stopped run',async({page},testInfo)=>{
  await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
  const body=await (await page.request.get('/api/snapshot')).json();const now=new Date().toISOString();
