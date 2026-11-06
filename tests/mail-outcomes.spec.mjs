@@ -1,0 +1,37 @@
+import {test,expect} from '@playwright/test';
+
+test('saved case outcomes reach authenticated cards and preserve owner decisions',async({page},testInfo)=>{
+ const denied=await page.request.get('/api/snapshot');expect(denied.status()).toBe(401);
+ await page.goto('/');await page.locator('input[name=password]').fill('fixture-only-browser-password');await page.locator('button[type=submit]').click();
+ const section=page.locator('#mail-secretary');
+ await expect(section).toContainText('Старейшее известное ожидание:');
+ await expect(section).toContainText('источник недоступен: 1');
+ const incoming=section.locator('[data-case="'+'1'.repeat(32)+'"]');
+ const outgoing=section.locator('[data-case="'+'2'.repeat(32)+'"]');
+ await incoming.locator('summary').first().click();await outgoing.locator('summary').first().click();
+ if(!await outgoing.getByText('Вы отметили дело решённым. Решение сохранено.',{exact:true}).count())await expect(outgoing).toContainText('Секретарь проверит новые сведения');
+ await outgoing.getByRole('button',{name:'Разобраться',exact:true}).click();
+ await expect(outgoing).toContainText('в очереди ближайшего ежедневного запуска');
+ await expect(incoming).toContainText('Ожидаемый результат: дать ответ');
+ await expect(incoming).toContainText('Следующий шаг за: вами');
+ await expect(incoming).toContainText('подготовить ответ по вопросу');
+ await expect(outgoing).toContainText('Ожидаемый результат: получить материал');
+ await expect(outgoing).toContainText('Следующий шаг за: собеседником');
+ await expect(outgoing).toContainText('Ведение дела: Почтовый секретарь');
+ await expect(outgoing).toContainText('Подтверждённый срок не установлен');
+ await outgoing.getByRole('button',{name:'Показать доказательства'}).click();
+ await expect(outgoing.locator('blockquote')).toContainText('Please send the signed document.');
+ await outgoing.getByRole('button',{name:'Напомнить',exact:true}).click();
+ const date=new Date(Date.now()+3*86400000).toISOString().slice(0,10);
+ await outgoing.getByLabel('Дата напоминания (Стамбул)').fill(date);
+ await outgoing.getByRole('button',{name:'Сохранить дату'}).click();
+ await expect(section.locator('.mail-snoozed')).toContainText('получить материал');
+ await outgoing.getByRole('button',{name:'Уже решено',exact:true}).click();await page.reload();
+ await outgoing.locator('summary').first().click();
+ await expect(section.locator('.mail-done')).toContainText('Вы отметили дело решённым');
+ await expect(outgoing).toContainText('Выполнение по переписке не подтверждено');
+ await expect(outgoing).toContainText('Ожидавшийся результат: получить материал');
+ await incoming.locator('summary').first().click();
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ await section.screenshot({path:testInfo.outputPath('mail-outcomes.png')});
+});
