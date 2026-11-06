@@ -35,7 +35,7 @@ Prototype source: [Captain Cockpit research branch](https://github.com/allai-eng
 - Normalize new Court/Hermes fields through an allowlist. No prompts, outputs, raw errors, document text, filesystem evidence paths or credentials enter the browser contract.
 - Source data is captured into an owner-private directory outside Git. Existing owner-visible account identities remain only in that private authenticated copy. Source-specific timestamps and stale markers are preserved.
 - Read execution SQLite with mode=ro and query_only, retaining scheduled/manual results. A running ledger entry needs separate identity/liveness evidence before being called active. Lack of evidence means unverified, not idle.
-- Current Court normalized data cannot confirm future hearings or procedural deadlines. Export coverage and scope-labeled counts now; confirmed event dates remain unavailable until an authoritative structured source exists. Existing fresh quota resets and stored job schedules may populate upcoming events with correct labels.
+- Current Court normalized data cannot confirm future hearings or procedural deadlines. Export coverage and scope-labeled counts now; confirmed event dates remain unavailable until an authoritative structured source exists. Fresh measured quota resets, supported renewal notices and canonical owner reminders may populate upcoming events with their actual roles. Internal job schedules remain in Hermes execution details.
 - Seen state stores opaque identifiers/revisions in this browser tab only; it survives page reload but is not synchronized or an acknowledgement/resolution. Missing data does not clear retained unresolved incidents. Explicit fresh recovery may clear an incident; retired accounts leave active lists without being labelled recovered.
 - The isolated preview uses a separate session-signing key while retaining the password verifier. Production auth material and service files are not modified. No real data is sent to design/model services or public CI.
 - No new inference, collection schedule, notification channel or automatic operational action is introduced.
@@ -51,3 +51,11 @@ Production deployment or restart; CPA, plugins, limits, authentication changes i
 ## Further Notes
 
 Tests and screenshots do not establish the one-minute usability target. The owner will review the isolated copy before a separately authorized installation. New protected backend/data modules cannot be installed through an unchanged presentation-only release helper; no gate is relaxed in this work.
+
+## Owner dates on the overview
+
+The seven-day list uses existing published metadata only: field-supported renewal notices from an accessible recently checked mailbox, current canonical reminders, measured quota resets, and confirmed structured court events. A publication date retains its publication role; no legal deadline is inferred. Namespaces keep unrelated source identities separate. A cancelled reminder disappears, while a later saved reminder remains; a conflicting canonical queue does not revive it.
+
+Date-only values remain Istanbul calendar dates, including the calendar date seven days ahead, without an invented time. Timestamped events use the existing rolling seven-day interval. Today/tomorrow/day-count labels accompany the exact date. Evidence retains the original source or reminder-save time; refreshing the page does not renew that evidence. Unknown renewal amounts stay unknown, and a past payment is never displayed as the next charge. The list explicitly states its limited coverage even when nonempty.
+
+This is a source change only. Existing protected-source release checks and actual owner-phone acceptance remain required before installation. Source collection, schedules, credentials, mail processing and commands are unchanged.

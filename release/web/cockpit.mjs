@@ -122,7 +122,7 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  $('cockpit-unknown-count').textContent='Пробелы в данных: '+gaps.length;$('cockpit-unknown').hidden=!gaps.length;
  $('cockpit-unknown-list').replaceChildren(...gaps.map(r=>row({...r,tone:'unknown',detail:'Нет свежего подтверждения. Откройте источник и время замера.'},now)));
  const events=view.events.map(e=>{
-  const record={id:e.id,title:e.title,domain:null,observedAt:e.observedAt,tone:'unknown',badge:e.kind,when:e.dateOnly?e.at:dateLabel(e.at),detail:e.source,evidence:[['Вид даты',e.kind],['Дата',e.dateOnly?e.at+' · время не указано':dateLabel(e.at)],['Источник',e.source]],next:'Посмотреть дату'};
+  const record={id:e.id,title:e.title,domain:null,observedAt:e.observedAt,tone:'unknown',badge:e.kind,when:e.when+' · '+(e.dateOnly?e.at:dateLabel(e.at)),detail:e.detail?e.detail+' '+e.source:e.source,evidence:[['Вид даты',e.kind],['Дата',e.dateOnly?e.at+' · время не указано':dateLabel(e.at)],['Источник',e.source],...(e.evidence||[])],next:'Посмотреть дату'};
   registry.set(opaque(record.id),record);return row(record,now);
  });
  $('cockpit-work').replaceChildren(...delegated.slice(0,6).map(r=>row(r,now,{scope:'work'})));
@@ -133,6 +133,7 @@ export function renderCockpit(snapshot,accounts,resources,now,transportError){
  $('cockpit-events').replaceChildren(...events.slice(0,3));
  if(!events.length)$('cockpit-events').append(el('p','Подтверждённых дат из доступных источников на 7 дней нет. Это не означает отсутствие сроков.','cockpit-empty'));
  if(events.length>3){const more=el('details',null,'cockpit-fold');more.append(el('summary','Ещё дат: '+(events.length-3)),...events.slice(3));$('cockpit-events').append(more);}
+ $('cockpit-events').append(el('p','Только даты из доступных подтверждений. Неизвестные и устаревшие даты не включены; это не полный перечень обязательств.','muted small'));
  const taskRecords=view.tasks.map(t=>taskRecord(t,now));for(const r of taskRecords)registry.set(opaque(r.id),r);
  $('cockpit-active').replaceChildren(...view.activeTasks.map(t=>row(taskRecord(t,now),now,{scope:'active'})));
  if(!view.activeTasks.length)$('cockpit-active').append(el('p','Подтверждённых активных исполнений нет. Это не доказательство простоя: журнал может быть неполным.','cockpit-empty'));
